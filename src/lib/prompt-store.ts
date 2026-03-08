@@ -1,31 +1,23 @@
 import { mockPrompts } from "@/data/mock-prompts";
 import {
-  PromptFilters,
+  LibraryTab,
+  PromptCategory,
   PromptItem,
-  PromptScope,
+  SnipSubcategory,
   SortMode,
   WorkspaceState
 } from "@/types/prompt";
 
-export const STORAGE_KEY = "prompt-workspace-state-v1";
-
-export const defaultFilters: PromptFilters = {
-  tags: [],
-  collection: [],
-  status: [],
-  preferredModel: [],
-  outputType: []
-};
+export const STORAGE_KEY = "prompt-workspace-state-v2";
 
 export function createInitialState(): WorkspaceState {
   return {
     prompts: mockPrompts,
-    selectedPromptId: mockPrompts[0]?.id ?? null,
-    query: "",
-    filters: defaultFilters,
-    sort: "recently-edited",
-    view: "list",
-    scope: "all"
+    composerBlocks: [],
+    libraryDrawerOpen: true,
+    libraryTab: "snips",
+    librarySearch: "",
+    sort: "recently-used"
   };
 }
 
@@ -40,10 +32,13 @@ export function loadState(): WorkspaceState {
       return createInitialState();
     }
 
-    const parsed = JSON.parse(raw) as WorkspaceState;
+    const parsed = JSON.parse(raw) as Partial<WorkspaceState>;
+    const initial = createInitialState();
     return {
-      ...createInitialState(),
-      ...parsed
+      ...initial,
+      ...parsed,
+      // Always use fresh prompts from mock data (don't persist prompt list)
+      prompts: initial.prompts
     };
   } catch {
     return createInitialState();
@@ -51,68 +46,80 @@ export function loadState(): WorkspaceState {
 }
 
 export function persistState(state: WorkspaceState): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (typeof window === "undefined") return;
+  // Persist everything except the prompts array (always loaded fresh from mock data)
+  const { prompts: _prompts, ...rest } = state;
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(rest));
 }
 
-function applyScope(prompts: PromptItem[], scope: PromptScope): PromptItem[] {
-  switch (scope) {
-    case "favorites":
-      return prompts.filter((p) => p.favorite && p.status !== "archived");
-    case "recent":
-      return [...prompts]
-        .sort((a, b) => +new Date(b.lastUsedAt) - +new Date(a.lastUsedAt))
-        .slice(0, 20);
-    case "drafts":
-      return prompts.filter((p) => p.status === "draft");
-    case "archived":
-      return prompts.filter((p) => p.status === "archived");
-    case "collections":
-    case "all":
-    default:
-      return prompts;
-  }
-}
+// ── Library filtering ────────────────────────────────────────────────────────
 
-function includesInFacet<T extends string>(selected: T[], value: T): boolean {
-  return selected.length === 0 || selected.includes(value);
-}
+export function getLibraryItems(
+  prompts: PromptItem[],
+  tab: LibraryTab,
+  search: string
+): PromptItem[] {
+  const q = search.trim().toLowerCase();
 
-export function filterPrompts(state: WorkspaceState): PromptItem[] {
-  const { prompts, filters, query, scope } = state;
-  const lowerQuery = query.trim().toLowerCase();
-
-  return applyScope(prompts, scope).filter((prompt) => {
-    const inSearch =
-      lowerQuery.length === 0 ||
-      [
-        prompt.title,
-        prompt.summary,
-        prompt.body,
-        prompt.collection,
-        prompt.tags.join(" ")
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(lowerQuery);
-
-    const matchesTags =
-      filters.tags.length === 0 ||
-      filters.tags.some((tag) => prompt.tags.includes(tag));
-
-    return (
-      inSearch &&
-      matchesTags &&
-      includesInFacet(filters.collection, prompt.collection) &&
-      includesInFacet(filters.status, prompt.status) &&
-      includesInFacet(filters.preferredModel, prompt.preferredModel) &&
-      includesInFacet(filters.outputType, prompt.outputType)
-    );
+  const byTab = prompts.filter((p) => {
+    if (p.status === "archived") return false;
+    if (tab === "snips") return p.category === "snip";
+    if (tab === "recipes") return p.category === "recipe";
+    if (tab === "kits") return p.category === "kit";
+    return true;
   });
+
+  if (!q) return byTab;
+
+  return byTab.filter((p) =>
+    [p.title, p.summary, p.body, p.tags.join(" ")]
+      .join(" ")
+      .toLowerCase()
+      .includes(q)
+  );
 }
+
+export function groupSnipsBySubcategory(
+  snips: PromptItem[]
+): Record<SnipSubcategory, PromptItem[]> {
+  const groups: Record<SnipSubcategory, PromptItem[]> = {
+    role: [],
+    tone: [],
+    output: [],
+    rules: []
+  };
+
+  snips.forEach((p) => {
+    if (p.subcategory && p.subcategory in groups) {
+      groups[p.subcategory].push(p);
+    }
+  });
+
+  return groups;
+}
+
+export function groupRecipesByCollection(
+  recipes: PromptItem[]
+): Record<string, PromptItem[]> {
+  const groups: Record<string, PromptItem[]> = {};
+
+  recipes.forEach((p) => {
+    const key = p.collection || "Other";
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(p);
+  });
+
+  return groups;
+}
+
+export function getRecentlyUsed(prompts: PromptItem[], limit = 5): PromptItem[] {
+  return [...prompts]
+    .filter((p) => p.status !== "archived" && p.lastUsedAt)
+    .sort((a, b) => +new Date(b.lastUsedAt) - +new Date(a.lastUsedAt))
+    .slice(0, limit);
+}
+
+// ── Sort ─────────────────────────────────────────────────────────────────────
 
 export function sortPrompts(prompts: PromptItem[], sortMode: SortMode): PromptItem[] {
   const sorted = [...prompts];
@@ -130,28 +137,13 @@ export function sortPrompts(prompts: PromptItem[], sortMode: SortMode): PromptIt
   }
 }
 
-export function getFacetOptions(prompts: PromptItem[]): {
-  tags: string[];
-  collection: string[];
-  preferredModel: PromptItem["preferredModel"][];
-  outputType: PromptItem["outputType"][];
-} {
-  const tags = new Set<string>();
-  const collection = new Set<string>();
-  const preferredModel = new Set<PromptItem["preferredModel"]>();
-  const outputType = new Set<PromptItem["outputType"]>();
+// ── Category label helpers ────────────────────────────────────────────────────
 
-  prompts.forEach((prompt) => {
-    prompt.tags.forEach((tag) => tags.add(tag));
-    collection.add(prompt.collection);
-    preferredModel.add(prompt.preferredModel);
-    outputType.add(prompt.outputType);
-  });
-
-  return {
-    tags: [...tags].sort(),
-    collection: [...collection].sort(),
-    preferredModel: [...preferredModel].sort(),
-    outputType: [...outputType].sort()
-  };
+export function categoryLabel(category: PromptCategory, subcategory?: SnipSubcategory): string {
+  if (category === "kit") return "Kit";
+  if (category === "recipe") return "Recipe";
+  if (category === "snip" && subcategory) {
+    return subcategory.charAt(0).toUpperCase() + subcategory.slice(1);
+  }
+  return "Snip";
 }

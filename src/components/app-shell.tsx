@@ -1,482 +1,300 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Menu } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 import { CommandPalette } from "@/components/command-palette";
-import { EmptyState } from "@/components/empty-state";
-import { MobileFilterSheet } from "@/components/mobile-filter-sheet";
-import { PromptComposer } from "@/components/prompt-composer";
-import { PromptDetailPane } from "@/components/prompt-detail-pane";
+import { ComposerCanvas } from "@/components/composer-canvas";
+import { LibraryDrawer } from "@/components/library-drawer";
 import { PromptEditor } from "@/components/prompt-editor";
-import { PromptList } from "@/components/prompt-list";
-import { Sidebar } from "@/components/sidebar";
-import { TopToolbar } from "@/components/top-toolbar";
-import { Button } from "@/components/ui/button";
 import {
   createInitialState,
-  defaultFilters,
-  filterPrompts,
-  getFacetOptions,
   loadState,
-  persistState,
-  sortPrompts
+  persistState
 } from "@/lib/prompt-store";
-import { PromptFilters, PromptItem, PromptScope, WorkspaceState } from "@/types/prompt";
+import {
+  ComposerBlock,
+  LibraryTab,
+  PromptItem,
+  WorkspaceState
+} from "@/types/prompt";
 
-function toggleFilterValue(values: readonly string[], value: string): string[] {
-  return values.includes(value) ? values.filter((v) => v !== value) : [...values, value];
+function makeBlock(prompt: PromptItem): ComposerBlock {
+  return {
+    instanceId: `${prompt.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    promptId: prompt.id,
+    title: prompt.title,
+    category: prompt.category,
+    subcategory: prompt.subcategory,
+    body: prompt.body,
+    isExpanded: false
+  };
 }
 
-export function AppShell(){
+export function AppShell() {
   const [state, setState] = useState<WorkspaceState>(createInitialState());
   const [hydrated, setHydrated] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingPrompt, setEditingPrompt] = useState<PromptItem | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [copyFeedback, setCopyFeedback] = useState("");
-  const [composerIds, setComposerIds] = useState<string[]>([]);
-  const [composerOpen, setComposerOpen] = useState(false);
-  const [composerVars, setComposerVars] = useState<Record<string, string>>({});
-  const [composedDraft, setComposedDraft] = useState<string | undefined>(undefined);
+  // Signal to focus library search (incrementing triggers the effect in LibraryDrawer)
+  const [focusSearchSignal, setFocusSearchSignal] = useState(0);
 
+  // Load persisted state on mount
   useEffect(() => {
-    const loadedState = loadState();
-    setState(loadedState);
+    setState(loadState());
     setHydrated(true);
   }, []);
 
+  // Persist state changes
   useEffect(() => {
-    if (!hydrated) {
-      return;
-    }
-
+    if (!hydrated) return;
     persistState(state);
   }, [state, hydrated]);
 
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent): void => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
+    const onKeyDown = (e: KeyboardEvent) => {
+      const meta = e.metaKey || e.ctrlKey;
+      const tag = (e.target as HTMLElement).tagName;
+      const inInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+
+      // Cmd+K — open command palette
+      if (meta && e.key.toLowerCase() === "k") {
+        e.preventDefault();
         setCommandPaletteOpen(true);
+        return;
       }
-      if (event.key.toLowerCase() === "n" && (event.metaKey || event.ctrlKey)) {
-        event.preventDefault();
-        openCreatePrompt();
+
+      // / — focus library search (when not in an input)
+      if (e.key === "/" && !inInput && !commandPaletteOpen) {
+        e.preventDefault();
+        // Open drawer if closed, then focus search
+        setState((prev) => ({ ...prev, libraryDrawerOpen: true }));
+        setFocusSearchSignal((n) => n + 1);
+        return;
       }
-      if (event.key === "Escape") {
+
+      // Escape — clear command palette or close it
+      if (e.key === "Escape") {
         setCommandPaletteOpen(false);
-        setMobileFiltersOpen(false);
-        setMobileDetailOpen(false);
+        return;
+      }
+
+      // Cmd+Backspace — remove last composer block
+      if (meta && e.key === "Backspace" && !inInput) {
+        e.preventDefault();
+        setState((prev) => ({
+          ...prev,
+          composerBlocks: prev.composerBlocks.slice(0, -1)
+        }));
+        return;
+      }
+
+      // Cmd+Shift+M — open new prompt editor
+      if (meta && e.shiftKey && e.key.toLowerCase() === "m") {
+        e.preventDefault();
+        setEditingPrompt(null);
+        setEditorOpen(true);
+        return;
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [commandPaletteOpen]);
+
+  // ── Composer actions ────────────────────────────────────────────────────
+  const addToComposer = useCallback((prompt: PromptItem) => {
+    setState((prev) => ({
+      ...prev,
+      prompts: prev.prompts.map((p) =>
+        p.id === prompt.id
+          ? { ...p, lastUsedAt: new Date().toISOString(), useCount: p.useCount + 1 }
+          : p
+      ),
+      composerBlocks: [...prev.composerBlocks, makeBlock(prompt)]
+    }));
   }, []);
 
-  useEffect(() => {
-    if (!copyFeedback) {
-      return;
-    }
+  const toggleExpand = useCallback((instanceId: string) => {
+    setState((prev) => ({
+      ...prev,
+      composerBlocks: prev.composerBlocks.map((b) =>
+        b.instanceId === instanceId ? { ...b, isExpanded: !b.isExpanded } : b
+      )
+    }));
+  }, []);
 
-    const timeout = window.setTimeout(() => setCopyFeedback(""), 1400);
-    return () => window.clearTimeout(timeout);
-  }, [copyFeedback]);
+  const removeBlock = useCallback((instanceId: string) => {
+    setState((prev) => ({
+      ...prev,
+      composerBlocks: prev.composerBlocks.filter((b) => b.instanceId !== instanceId)
+    }));
+  }, []);
 
-  const filteredPrompts = useMemo(() => sortPrompts(filterPrompts(state), state.sort), [state]);
+  const updateBlockBody = useCallback((instanceId: string, body: string) => {
+    setState((prev) => ({
+      ...prev,
+      composerBlocks: prev.composerBlocks.map((b) =>
+        b.instanceId === instanceId ? { ...b, body } : b
+      )
+    }));
+  }, []);
 
-  useEffect(() => {
-    if (filteredPrompts.length === 0) {
-      return;
-    }
+  const reorderBlocks = useCallback((from: number, to: number) => {
+    setState((prev) => {
+      const blocks = [...prev.composerBlocks];
+      const [moved] = blocks.splice(from, 1);
+      blocks.splice(to, 0, moved);
+      return { ...prev, composerBlocks: blocks };
+    });
+  }, []);
 
-    if (!state.selectedPromptId || !filteredPrompts.some((prompt) => prompt.id === state.selectedPromptId)) {
-      setState((prev) => ({ ...prev, selectedPromptId: filteredPrompts[0].id }));
-    }
-  }, [filteredPrompts, state.selectedPromptId]);
+  const clearComposer = useCallback(() => {
+    setState((prev) => ({ ...prev, composerBlocks: [] }));
+  }, []);
 
-  const selectedPrompt = useMemo(
-    () => state.prompts.find((prompt) => prompt.id === state.selectedPromptId) ?? null,
-    [state.prompts, state.selectedPromptId]
+  // ── Prompt management ───────────────────────────────────────────────────
+  const archivePrompt = useCallback((id: string) => {
+    setState((prev) => ({
+      ...prev,
+      prompts: prev.prompts.map((p) =>
+        p.id === id ? { ...p, status: "archived", updatedAt: new Date().toISOString() } : p
+      )
+    }));
+  }, []);
+
+  const savePrompt = useCallback(
+    (payload: Omit<PromptItem, "id" | "createdAt" | "updatedAt" | "lastUsedAt" | "useCount" | "versions">) => {
+      const now = new Date().toISOString();
+
+      if (editingPrompt) {
+        setState((prev) => ({
+          ...prev,
+          prompts: prev.prompts.map((p) =>
+            p.id === editingPrompt.id
+              ? {
+                  ...p,
+                  ...payload,
+                  updatedAt: now,
+                  versions: [
+                    { id: `v-${Date.now()}`, body: p.body, updatedAt: now, note: "Edited" },
+                    ...p.versions
+                  ]
+                }
+              : p
+          )
+        }));
+      } else {
+        const created: PromptItem = {
+          id: `prompt-${Math.random().toString(36).slice(2, 9)}`,
+          createdAt: now,
+          updatedAt: now,
+          lastUsedAt: now,
+          useCount: 0,
+          versions: [{ id: `v-${Date.now()}`, body: payload.body, updatedAt: now, note: "Initial" }],
+          ...payload
+        };
+        setState((prev) => ({ ...prev, prompts: [created, ...prev.prompts] }));
+      }
+
+      setEditorOpen(false);
+      setEditingPrompt(null);
+    },
+    [editingPrompt]
   );
 
-  const filterOptions = useMemo(() => getFacetOptions(state.prompts), [state.prompts]);
+  const openEditPrompt = useCallback((prompt: PromptItem) => {
+    setEditingPrompt(prompt);
+    setEditorOpen(true);
+  }, []);
 
-  const updatePromptList = (updater: (prompts: PromptItem[]) => PromptItem[]): void => {
-    setState((prev) => ({
-      ...prev,
-      prompts: updater(prev.prompts)
-    }));
-  };
-
-  const onScopeChange = (scope: PromptScope): void => {
-    setState((prev) => ({ ...prev, scope }));
-    setSidebarOpen(false);
-  };
-
-  const onToggleFilter = (key: keyof PromptFilters, value: string): void => {
-    setState((prev) => ({
-      ...prev,
-      filters: {
-        ...prev.filters,
-        [key]: toggleFilterValue(prev.filters[key], value)
-      } as PromptFilters
-    }));
-  };
-
-  const onSelectPrompt = (promptId: string): void => {
-    setState((prev) => ({ ...prev, selectedPromptId: promptId }));
-    setMobileDetailOpen(true);
-  };
-
-  const copySelected = async (): Promise<void> => {
-    if (!selectedPrompt) {
-      return;
-    }
-
-    await navigator.clipboard.writeText(selectedPrompt.body);
-    setCopyFeedback("Copied prompt body to clipboard");
-    updatePromptList((prompts) =>
-      prompts.map((prompt) =>
-        prompt.id === selectedPrompt.id
-          ? {
-              ...prompt,
-              lastUsedAt: new Date().toISOString(),
-              useCount: prompt.useCount + 1
-            }
-          : prompt
-      )
-    );
-  };
-
-  const duplicateSelected = (): void => {
-    if (!selectedPrompt) {
-      return;
-    }
-
-    const now = new Date().toISOString();
-    const duplicated: PromptItem = {
-      ...selectedPrompt,
-      id: `prompt-${Math.random().toString(36).slice(2, 9)}`,
-      title: `${selectedPrompt.title} (Copy)`,
-      createdAt: now,
-      updatedAt: now,
-      lastUsedAt: now,
-      useCount: 0,
-      versions: [
-        ...selectedPrompt.versions,
-        {
-          id: `v-${Date.now()}`,
-          body: selectedPrompt.body,
-          updatedAt: now,
-          note: "Duplicated"
-        }
-      ]
-    };
-
-    setState((prev) => ({
-      ...prev,
-      prompts: [duplicated, ...prev.prompts],
-      selectedPromptId: duplicated.id
-    }));
-  };
-
-  const toggleFavoriteSelected = (): void => {
-    if (!selectedPrompt) {
-      return;
-    }
-
-    updatePromptList((prompts) =>
-      prompts.map((prompt) =>
-        prompt.id === selectedPrompt.id ? { ...prompt, favorite: !prompt.favorite } : prompt
-      )
-    );
-  };
-
-  const archiveSelected = (): void => {
-    if (!selectedPrompt) {
-      return;
-    }
-
-    updatePromptList((prompts) =>
-      prompts.map((prompt) =>
-        prompt.id === selectedPrompt.id
-          ? { ...prompt, status: "archived", updatedAt: new Date().toISOString() }
-          : prompt
-      )
-    );
-  };
-
-  const openCreatePrompt = (): void => {
-    setComposedDraft(undefined);
+  const openNewPrompt = useCallback(() => {
     setEditingPrompt(null);
     setEditorOpen(true);
-  };
+  }, []);
 
-  const addToComposer = (id: string): void => {
-    setComposerIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
-    setComposerOpen(true);
-  };
+  // ── Library drawer state ────────────────────────────────────────────────
+  const setLibraryTab = useCallback((tab: LibraryTab) => {
+    setState((prev) => ({ ...prev, libraryTab: tab }));
+  }, []);
 
-  const removeFromComposer = (id: string): void => {
-    setComposerIds((prev) => prev.filter((x) => x !== id));
-  };
+  const setLibrarySearch = useCallback((search: string) => {
+    setState((prev) => ({ ...prev, librarySearch: search }));
+  }, []);
 
-  const clearComposer = (): void => {
-    setComposerIds([]);
-    setComposerVars({});
-    setComposerOpen(false);
-  };
-
-  const openSaveComposed = (body: string): void => {
-    setComposedDraft(body);
-    setEditingPrompt(null);
-    setEditorOpen(true);
-  };
-
-  const openEditPrompt = (): void => {
-    if (!selectedPrompt) {
-      return;
-    }
-    setEditingPrompt(selectedPrompt);
-    setEditorOpen(true);
-  };
-
-  const savePrompt = (
-    payload: Omit<PromptItem, "id" | "createdAt" | "updatedAt" | "lastUsedAt" | "useCount" | "versions">
-  ): void => {
-    const now = new Date().toISOString();
-
-    if (editingPrompt) {
-      updatePromptList((prompts) =>
-        prompts.map((prompt) =>
-          prompt.id === editingPrompt.id
-            ? {
-                ...prompt,
-                ...payload,
-                updatedAt: now,
-                versions: [
-                  {
-                    id: `v-${Date.now()}`,
-                    body: prompt.body,
-                    updatedAt: now,
-                    note: "Edited"
-                  },
-                  ...prompt.versions
-                ]
-              }
-            : prompt
-        )
-      );
-      setState((prev) => ({ ...prev, selectedPromptId: editingPrompt.id }));
-    } else {
-      const created: PromptItem = {
-        id: `prompt-${Math.random().toString(36).slice(2, 9)}`,
-        createdAt: now,
-        updatedAt: now,
-        lastUsedAt: now,
-        useCount: 0,
-        versions: [
-          {
-            id: `v-${Date.now()}`,
-            body: payload.body,
-            updatedAt: now,
-            note: "Initial"
-          }
-        ],
-        ...payload
-      };
-      setState((prev) => ({
-        ...prev,
-        prompts: [created, ...prev.prompts],
-        selectedPromptId: created.id
-      }));
-    }
-
-    setEditorOpen(false);
-    setEditingPrompt(null);
-  };
-
-  const smartViews = [
-    {
-      id: "high-usage",
-      label: "High Usage",
-      action: () => {
-        setState((prev) => ({
-          ...prev,
-          sort: "most-used",
-          query: "",
-          scope: "all"
-        }));
-      }
-    },
-    {
-      id: "drafts-needing-work",
-      label: "Drafts Needing Work",
-      action: () => {
-        setState((prev) => ({
-          ...prev,
-          scope: "drafts",
-          filters: defaultFilters,
-          query: ""
-        }));
-      }
-    },
-    {
-      id: "research-pack",
-      label: "Research Pack",
-      action: () => {
-        setState((prev) => ({
-          ...prev,
-          filters: {
-            ...defaultFilters,
-            tags: ["research"]
-          },
-          scope: "all"
-        }));
-      }
-    }
-  ];
+  const toggleDrawer = useCallback(() => {
+    setState((prev) => ({ ...prev, libraryDrawerOpen: !prev.libraryDrawerOpen }));
+  }, []);
 
   return (
-    <div className="flex h-screen bg-background text-foreground">
-      <div className="hidden md:block">
-        <Sidebar scope={state.scope} onScopeChange={onScopeChange} smartViews={smartViews} />
+    <div className="flex h-screen bg-[#0f1317] text-white overflow-hidden">
+      {/* Top bar */}
+      <div className="absolute top-0 left-0 right-0 h-10 flex items-center px-3 gap-2 z-10 border-b border-white/[0.04] bg-[#0f1317]">
+        <button
+          onClick={toggleDrawer}
+          className="p-1.5 rounded-md text-white/30 hover:text-white/60 hover:bg-white/[0.05] transition-colors"
+          title={state.libraryDrawerOpen ? "Close library" : "Open library"}
+        >
+          {state.libraryDrawerOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
+        </button>
+        <span className="text-xs font-semibold tracking-widest text-white/20 uppercase select-none">
+          DOPE
+        </span>
       </div>
 
-      {sidebarOpen ? (
-        <div className="fixed inset-0 z-40 bg-black/60 md:hidden" onClick={() => setSidebarOpen(false)}>
-          <div className="h-full w-64" onClick={(event) => event.stopPropagation()}>
-            <Sidebar scope={state.scope} onScopeChange={onScopeChange} smartViews={smartViews} />
-          </div>
-        </div>
-      ) : null}
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        <TopToolbar
-          query={state.query}
-          onQueryChange={(query) => setState((prev) => ({ ...prev, query }))}
-          filters={state.filters}
-          filterOptions={filterOptions}
-          onToggleFilter={onToggleFilter}
-          onClearFilters={() => setState((prev) => ({ ...prev, filters: defaultFilters }))}
-          sort={state.sort}
-          onSortChange={(sort) => setState((prev) => ({ ...prev, sort }))}
-          view={state.view}
-          onViewChange={(view) => setState((prev) => ({ ...prev, view }))}
-          onNewPrompt={openCreatePrompt}
-          onCommandPaletteOpen={() => setCommandPaletteOpen(true)}
-          onOpenMobileFilters={() => setMobileFiltersOpen(true)}
-        />
-
-        <main className="flex min-h-0 flex-1">
-          <section className="relative min-w-0 flex-1 overflow-y-auto border-r border-border/70 bg-[#12181e]">
-            <div className="absolute left-2 top-2 z-10 md:hidden">
-              <Button size="icon" variant="outline" onClick={() => setSidebarOpen(true)}>
-                <Menu className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {filteredPrompts.length ? (
-              <PromptList
-                prompts={filteredPrompts}
-                selectedPromptId={state.selectedPromptId}
-                view={state.view}
-                onSelectPrompt={onSelectPrompt}
-                composerIds={composerIds}
-                onAddToComposer={addToComposer}
-              />
-            ) : (
-              <EmptyState
-                onReset={() => setState((prev) => ({ ...prev, query: "", filters: defaultFilters, scope: "all" }))}
-              />
-            )}
-          </section>
-
-          <div className="hidden w-[44%] min-w-[360px] xl:block">
-            <PromptDetailPane
-              prompt={selectedPrompt}
-              onCopy={copySelected}
-              onDuplicate={duplicateSelected}
-              onToggleFavorite={toggleFavoriteSelected}
-              onArchive={archiveSelected}
-              onEdit={openEditPrompt}
-              copyFeedback={copyFeedback}
+      {/* Main content below topbar */}
+      <div className="flex flex-1 min-h-0 pt-10">
+        {/* Library Drawer */}
+        {state.libraryDrawerOpen && (
+          <div className="w-72 shrink-0 h-full overflow-hidden">
+            <LibraryDrawer
+              prompts={state.prompts}
+              tab={state.libraryTab}
+              search={state.librarySearch}
+              focusSearchSignal={focusSearchSignal}
+              onTabChange={setLibraryTab}
+              onSearchChange={setLibrarySearch}
+              onAddToComposer={addToComposer}
+              onEditPrompt={openEditPrompt}
+              onArchivePrompt={archivePrompt}
+              onNewPrompt={openNewPrompt}
             />
           </div>
-        </main>
+        )}
 
-        <PromptComposer
-          open={composerOpen}
-          onToggle={() => setComposerOpen((o) => !o)}
-          ids={composerIds}
-          prompts={state.prompts}
-          vars={composerVars}
-          onVarChange={(k, v) => setComposerVars((prev) => ({ ...prev, [k]: v }))}
-          onRemove={removeFromComposer}
-          onReorder={setComposerIds}
-          onClear={clearComposer}
-          onSaveAsNew={openSaveComposed}
-        />
-      </div>
-
-      {mobileDetailOpen && selectedPrompt ? (
-        <div className="fixed inset-0 z-40 bg-black/70 xl:hidden">
-          <PromptDetailPane
-            prompt={selectedPrompt}
-            onCopy={copySelected}
-            onDuplicate={duplicateSelected}
-            onToggleFavorite={toggleFavoriteSelected}
-            onArchive={archiveSelected}
-            onEdit={openEditPrompt}
-            copyFeedback={copyFeedback}
-            mobile
-            onCloseMobile={() => setMobileDetailOpen(false)}
+        {/* Composer Canvas */}
+        <div className="flex-1 min-w-0 h-full overflow-hidden">
+          <ComposerCanvas
+            blocks={state.composerBlocks}
+            onToggleExpand={toggleExpand}
+            onRemove={removeBlock}
+            onBodyChange={updateBlockBody}
+            onReorder={reorderBlocks}
+            onClearAll={clearComposer}
           />
         </div>
-      ) : null}
+      </div>
 
+      {/* Prompt Editor modal */}
       <PromptEditor
         open={editorOpen}
         prompt={editingPrompt}
-        initialBody={composedDraft}
         onClose={() => {
           setEditorOpen(false);
           setEditingPrompt(null);
-          setComposedDraft(undefined);
         }}
         onSave={savePrompt}
       />
 
+      {/* Command Palette */}
       <CommandPalette
         open={commandPaletteOpen}
         prompts={state.prompts}
-        selectedPrompt={selectedPrompt}
         onClose={() => setCommandPaletteOpen(false)}
-        onJumpToPrompt={(promptId) => {
-          setState((prev) => ({ ...prev, selectedPromptId: promptId }));
-          setMobileDetailOpen(true);
-        }}
-        onCreatePrompt={openCreatePrompt}
-        onDuplicateSelected={duplicateSelected}
-        onToggleFavoriteSelected={toggleFavoriteSelected}
-      />
-
-      <MobileFilterSheet
-        open={mobileFiltersOpen}
-        onClose={() => setMobileFiltersOpen(false)}
-        filters={state.filters}
-        options={filterOptions}
-        onToggleFilter={onToggleFilter}
-        onClearFilters={() => setState((prev) => ({ ...prev, filters: defaultFilters }))}
-        sort={state.sort}
-        onSortChange={(sort) => setState((prev) => ({ ...prev, sort }))}
-        view={state.view}
-        onViewChange={(view) => setState((prev) => ({ ...prev, view }))}
+        onAddToComposer={addToComposer}
+        onNewPrompt={openNewPrompt}
       />
     </div>
   );

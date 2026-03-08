@@ -1,6 +1,7 @@
 import { PromptItem } from "@/types/prompt";
 
 export const mockPrompts: PromptItem[] = [
+  // ── Recipes ─────────────────────────────────────────────────────────────
   {
     id: "prompt-001",
     title: "Product Launch Brief Generator",
@@ -13,30 +14,21 @@ export const mockPrompts: PromptItem[] = [
     preferredModel: "gpt-4.1",
     favorite: true,
     status: "active",
+    category: "recipe",
     createdAt: "2025-11-04T10:20:00.000Z",
     updatedAt: "2026-02-26T13:32:00.000Z",
     lastUsedAt: "2026-03-04T08:09:00.000Z",
     useCount: 54,
     versions: [
-      {
-        id: "v1",
-        body: "Early version focused only on message pillars and channels.",
-        updatedAt: "2025-12-01T12:00:00.000Z",
-        note: "Added owner map and launch risks"
-      },
-      {
-        id: "v2",
-        body: "Added timeline and section constraints for better scanability.",
-        updatedAt: "2026-02-26T13:32:00.000Z",
-        note: "Current"
-      }
+      { id: "v1", body: "Early version focused only on message pillars and channels.", updatedAt: "2025-12-01T12:00:00.000Z", note: "Added owner map and launch risks" },
+      { id: "v2", body: "Added timeline and section constraints for better scanability.", updatedAt: "2026-02-26T13:32:00.000Z", note: "Current" }
     ]
   },
   {
     id: "prompt-002",
     title: "PR Review Diff Assistant",
     summary: "Analyze a git diff and surface regressions, edge cases, and missing tests.",
-    body: "You are a strict code reviewer. Review this diff for correctness and maintainability. Prioritize bugs and behavioral regressions. Provide findings in severity order, include exact file and line references, and mention missing tests.\n\nDiff:\n{{git_diff}}",
+    body: "Review this diff for correctness and maintainability. Prioritize bugs and behavioral regressions. Provide findings in severity order, include exact file and line references, and mention missing tests.\n\nDiff:\n{{git_diff}}",
     tags: ["engineering", "review", "quality"],
     collection: "Engineering",
     variables: ["git_diff"],
@@ -44,23 +36,14 @@ export const mockPrompts: PromptItem[] = [
     preferredModel: "o4-mini",
     favorite: true,
     status: "active",
+    category: "recipe",
     createdAt: "2025-09-14T09:18:00.000Z",
     updatedAt: "2026-03-01T16:14:00.000Z",
     lastUsedAt: "2026-03-05T14:11:00.000Z",
     useCount: 112,
     versions: [
-      {
-        id: "v1",
-        body: "Initial reviewer structure.",
-        updatedAt: "2025-09-14T09:18:00.000Z",
-        note: "Initial"
-      },
-      {
-        id: "v2",
-        body: "Added explicit line references and test coverage requirement.",
-        updatedAt: "2026-03-01T16:14:00.000Z",
-        note: "Current"
-      }
+      { id: "v1", body: "Initial reviewer structure.", updatedAt: "2025-09-14T09:18:00.000Z", note: "Initial" },
+      { id: "v2", body: "Added explicit line references and test coverage requirement.", updatedAt: "2026-03-01T16:14:00.000Z", note: "Current" }
     ]
   },
   {
@@ -75,23 +58,14 @@ export const mockPrompts: PromptItem[] = [
     preferredModel: "gpt-4o",
     favorite: false,
     status: "active",
+    category: "recipe",
     createdAt: "2025-08-10T07:05:00.000Z",
     updatedAt: "2026-02-12T18:41:00.000Z",
     lastUsedAt: "2026-02-28T15:55:00.000Z",
     useCount: 38,
     versions: [
-      {
-        id: "v1",
-        body: "Original single paragraph output version.",
-        updatedAt: "2025-08-10T07:05:00.000Z",
-        note: "Initial"
-      },
-      {
-        id: "v2",
-        body: "Switched to structured sections and strict bullet caps.",
-        updatedAt: "2026-02-12T18:41:00.000Z",
-        note: "Current"
-      }
+      { id: "v1", body: "Original single paragraph output version.", updatedAt: "2025-08-10T07:05:00.000Z", note: "Initial" },
+      { id: "v2", body: "Switched to structured sections and strict bullet caps.", updatedAt: "2026-02-12T18:41:00.000Z", note: "Current" }
     ]
   },
   {
@@ -106,18 +80,12 @@ export const mockPrompts: PromptItem[] = [
     preferredModel: "claude-sonnet",
     favorite: false,
     status: "active",
+    category: "recipe",
     createdAt: "2025-12-06T11:11:00.000Z",
     updatedAt: "2026-02-09T09:02:00.000Z",
     lastUsedAt: "2026-02-22T10:20:00.000Z",
     useCount: 27,
-    versions: [
-      {
-        id: "v1",
-        body: "Early extraction prompt.",
-        updatedAt: "2025-12-06T11:11:00.000Z",
-        note: "Initial"
-      }
-    ]
+    versions: [{ id: "v1", body: "Early extraction prompt.", updatedAt: "2025-12-06T11:11:00.000Z", note: "Initial" }]
   },
   {
     id: "prompt-005",
@@ -131,23 +99,14 @@ export const mockPrompts: PromptItem[] = [
     preferredModel: "gpt-4.1",
     favorite: true,
     status: "active",
+    category: "recipe",
     createdAt: "2025-10-18T08:01:00.000Z",
     updatedAt: "2026-01-30T20:18:00.000Z",
     lastUsedAt: "2026-02-19T18:10:00.000Z",
     useCount: 63,
     versions: [
-      {
-        id: "v1",
-        body: "Initial template.",
-        updatedAt: "2025-10-18T08:01:00.000Z",
-        note: "Initial"
-      },
-      {
-        id: "v2",
-        body: "Added ownership and deadlines in action items.",
-        updatedAt: "2026-01-30T20:18:00.000Z",
-        note: "Current"
-      }
+      { id: "v1", body: "Initial template.", updatedAt: "2025-10-18T08:01:00.000Z", note: "Initial" },
+      { id: "v2", body: "Added ownership and deadlines in action items.", updatedAt: "2026-01-30T20:18:00.000Z", note: "Current" }
     ]
   },
   {
@@ -162,18 +121,12 @@ export const mockPrompts: PromptItem[] = [
     preferredModel: "gpt-4o",
     favorite: false,
     status: "draft",
+    category: "recipe",
     createdAt: "2026-02-15T12:00:00.000Z",
     updatedAt: "2026-03-03T14:28:00.000Z",
     lastUsedAt: "2026-03-03T14:27:00.000Z",
     useCount: 9,
-    versions: [
-      {
-        id: "v1",
-        body: "Draft with less strict word limit.",
-        updatedAt: "2026-02-15T12:00:00.000Z",
-        note: "Initial"
-      }
-    ]
+    versions: [{ id: "v1", body: "Draft with less strict word limit.", updatedAt: "2026-02-15T12:00:00.000Z", note: "Initial" }]
   },
   {
     id: "prompt-007",
@@ -187,23 +140,14 @@ export const mockPrompts: PromptItem[] = [
     preferredModel: "gemini-pro",
     favorite: false,
     status: "active",
+    category: "recipe",
     createdAt: "2025-11-22T06:44:00.000Z",
     updatedAt: "2026-02-20T11:30:00.000Z",
     lastUsedAt: "2026-02-25T10:40:00.000Z",
     useCount: 45,
     versions: [
-      {
-        id: "v1",
-        body: "Original outline generator.",
-        updatedAt: "2025-11-22T06:44:00.000Z",
-        note: "Initial"
-      },
-      {
-        id: "v2",
-        body: "Added FAQ and internal links sections.",
-        updatedAt: "2026-02-20T11:30:00.000Z",
-        note: "Current"
-      }
+      { id: "v1", body: "Original outline generator.", updatedAt: "2025-11-22T06:44:00.000Z", note: "Initial" },
+      { id: "v2", body: "Added FAQ and internal links sections.", updatedAt: "2026-02-20T11:30:00.000Z", note: "Current" }
     ]
   },
   {
@@ -218,18 +162,12 @@ export const mockPrompts: PromptItem[] = [
     preferredModel: "gpt-4.1",
     favorite: false,
     status: "active",
+    category: "recipe",
     createdAt: "2025-07-12T16:20:00.000Z",
     updatedAt: "2026-01-16T18:24:00.000Z",
     lastUsedAt: "2026-02-11T09:54:00.000Z",
     useCount: 22,
-    versions: [
-      {
-        id: "v1",
-        body: "Structured matrix baseline.",
-        updatedAt: "2025-07-12T16:20:00.000Z",
-        note: "Initial"
-      }
-    ]
+    versions: [{ id: "v1", body: "Structured matrix baseline.", updatedAt: "2025-07-12T16:20:00.000Z", note: "Initial" }]
   },
   {
     id: "prompt-009",
@@ -243,23 +181,14 @@ export const mockPrompts: PromptItem[] = [
     preferredModel: "o4-mini",
     favorite: true,
     status: "active",
+    category: "recipe",
     createdAt: "2025-10-03T13:13:00.000Z",
     updatedAt: "2026-02-24T12:01:00.000Z",
     lastUsedAt: "2026-03-05T08:01:00.000Z",
     useCount: 71,
     versions: [
-      {
-        id: "v1",
-        body: "First pass risk scan.",
-        updatedAt: "2025-10-03T13:13:00.000Z",
-        note: "Initial"
-      },
-      {
-        id: "v2",
-        body: "Added rollout concern and sequencing guidance.",
-        updatedAt: "2026-02-24T12:01:00.000Z",
-        note: "Current"
-      }
+      { id: "v1", body: "First pass risk scan.", updatedAt: "2025-10-03T13:13:00.000Z", note: "Initial" },
+      { id: "v2", body: "Added rollout concern and sequencing guidance.", updatedAt: "2026-02-24T12:01:00.000Z", note: "Current" }
     ]
   },
   {
@@ -274,17 +203,299 @@ export const mockPrompts: PromptItem[] = [
     preferredModel: "gpt-4o",
     favorite: false,
     status: "archived",
+    category: "recipe",
     createdAt: "2025-05-16T15:45:00.000Z",
     updatedAt: "2025-12-10T10:07:00.000Z",
     lastUsedAt: "2025-12-11T10:30:00.000Z",
     useCount: 12,
-    versions: [
-      {
-        id: "v1",
-        body: "Legacy migration template.",
-        updatedAt: "2025-05-16T15:45:00.000Z",
-        note: "Initial"
-      }
-    ]
+    versions: [{ id: "v1", body: "Legacy migration template.", updatedAt: "2025-05-16T15:45:00.000Z", note: "Initial" }]
+  },
+
+  // ── Role Snips ───────────────────────────────────────────────────────────
+  {
+    id: "snip-role-001",
+    title: "Senior Engineer",
+    summary: "Act as a senior engineer — practical, precise, no hand-holding.",
+    body: "You are a senior software engineer with 10+ years of experience. You value correctness, simplicity, and maintainability. Be direct. Skip boilerplate explanations unless asked.",
+    tags: ["engineering"],
+    collection: "Snips",
+    variables: [],
+    outputType: "markdown",
+    preferredModel: "claude-sonnet",
+    favorite: true,
+    status: "active",
+    category: "snip",
+    subcategory: "role",
+    createdAt: "2026-01-10T09:00:00.000Z",
+    updatedAt: "2026-02-14T10:00:00.000Z",
+    lastUsedAt: "2026-03-05T14:11:00.000Z",
+    useCount: 89,
+    versions: []
+  },
+  {
+    id: "snip-role-002",
+    title: "Product Manager",
+    summary: "Frame responses around user value, business outcomes, and tradeoffs.",
+    body: "You are an experienced product manager. You think in terms of user needs, business impact, and prioritization tradeoffs. Frame your answers around outcomes, not features.",
+    tags: ["product"],
+    collection: "Snips",
+    variables: [],
+    outputType: "markdown",
+    preferredModel: "gpt-4.1",
+    favorite: true,
+    status: "active",
+    category: "snip",
+    subcategory: "role",
+    createdAt: "2026-01-12T09:00:00.000Z",
+    updatedAt: "2026-02-01T10:00:00.000Z",
+    lastUsedAt: "2026-03-04T08:09:00.000Z",
+    useCount: 61,
+    versions: []
+  },
+  {
+    id: "snip-role-003",
+    title: "Data Analyst",
+    summary: "Reason from data — identify patterns, caveats, and confidence levels.",
+    body: "You are a data analyst. Reason from evidence. Call out assumptions, data gaps, and confidence levels. Prefer specific numbers over vague claims. Flag when correlation ≠ causation.",
+    tags: ["data", "analysis"],
+    collection: "Snips",
+    variables: [],
+    outputType: "markdown",
+    preferredModel: "o4-mini",
+    favorite: false,
+    status: "active",
+    category: "snip",
+    subcategory: "role",
+    createdAt: "2026-01-20T09:00:00.000Z",
+    updatedAt: "2026-01-20T09:00:00.000Z",
+    lastUsedAt: "2026-02-22T10:20:00.000Z",
+    useCount: 34,
+    versions: []
+  },
+  {
+    id: "snip-role-004",
+    title: "Strict Code Reviewer",
+    summary: "Review code as a demanding, detail-oriented senior reviewer.",
+    body: "You are a strict code reviewer. You care about correctness, edge cases, test coverage, and long-term maintainability. Do not give false praise. Point out every real concern.",
+    tags: ["engineering", "review"],
+    collection: "Snips",
+    variables: [],
+    outputType: "bullet-list",
+    preferredModel: "o4-mini",
+    favorite: true,
+    status: "active",
+    category: "snip",
+    subcategory: "role",
+    createdAt: "2026-01-25T09:00:00.000Z",
+    updatedAt: "2026-02-18T09:00:00.000Z",
+    lastUsedAt: "2026-03-05T14:11:00.000Z",
+    useCount: 77,
+    versions: []
+  },
+
+  // ── Tone Snips ───────────────────────────────────────────────────────────
+  {
+    id: "snip-tone-001",
+    title: "Direct & Concise",
+    summary: "Cut filler. One idea per sentence. No hedging.",
+    body: "Write in a direct, concise tone. Eliminate filler words. One idea per sentence. No hedging language (avoid: 'it could be argued', 'perhaps', 'it is worth noting'). Lead with the point.",
+    tags: ["tone", "writing"],
+    collection: "Snips",
+    variables: [],
+    outputType: "markdown",
+    preferredModel: "claude-sonnet",
+    favorite: true,
+    status: "active",
+    category: "snip",
+    subcategory: "tone",
+    createdAt: "2026-01-15T09:00:00.000Z",
+    updatedAt: "2026-02-10T09:00:00.000Z",
+    lastUsedAt: "2026-03-05T08:01:00.000Z",
+    useCount: 95,
+    versions: []
+  },
+  {
+    id: "snip-tone-002",
+    title: "Executive-Friendly",
+    summary: "Written for a time-poor C-level reader — BLUF structure, short paragraphs.",
+    body: "Write for a C-level audience. Use BLUF (Bottom Line Up Front) structure. Short paragraphs (3 sentences max). No jargon. Include a clear ask or decision needed at the end.",
+    tags: ["tone", "leadership", "communication"],
+    collection: "Snips",
+    variables: [],
+    outputType: "email",
+    preferredModel: "gpt-4o",
+    favorite: false,
+    status: "active",
+    category: "snip",
+    subcategory: "tone",
+    createdAt: "2026-01-18T09:00:00.000Z",
+    updatedAt: "2026-01-18T09:00:00.000Z",
+    lastUsedAt: "2026-03-03T14:27:00.000Z",
+    useCount: 42,
+    versions: []
+  },
+  {
+    id: "snip-tone-003",
+    title: "Technical Depth",
+    summary: "Don't dumb it down — use precise terminology, assume expert reader.",
+    body: "Assume the reader is a technical expert. Use precise terminology. Do not over-explain fundamentals. Use correct naming conventions and cite specifics (version numbers, API names, etc.).",
+    tags: ["tone", "engineering"],
+    collection: "Snips",
+    variables: [],
+    outputType: "markdown",
+    preferredModel: "claude-sonnet",
+    favorite: false,
+    status: "active",
+    category: "snip",
+    subcategory: "tone",
+    createdAt: "2026-02-01T09:00:00.000Z",
+    updatedAt: "2026-02-01T09:00:00.000Z",
+    lastUsedAt: "2026-02-28T15:55:00.000Z",
+    useCount: 28,
+    versions: []
+  },
+
+  // ── Output Snips ─────────────────────────────────────────────────────────
+  {
+    id: "snip-output-001",
+    title: "JSON Format",
+    summary: "Return valid, parseable JSON only — no prose wrapper.",
+    body: "Return output as valid JSON only. Do not include any prose, markdown code fences, or explanations outside the JSON. The response must be directly parseable by JSON.parse().",
+    tags: ["output", "json"],
+    collection: "Snips",
+    variables: [],
+    outputType: "json",
+    preferredModel: "gpt-4o",
+    favorite: true,
+    status: "active",
+    category: "snip",
+    subcategory: "output",
+    createdAt: "2026-01-08T09:00:00.000Z",
+    updatedAt: "2026-01-08T09:00:00.000Z",
+    lastUsedAt: "2026-03-05T14:11:00.000Z",
+    useCount: 103,
+    versions: []
+  },
+  {
+    id: "snip-output-002",
+    title: "Structured Markdown",
+    summary: "Use headers, bullets, and code blocks — scannable over readable.",
+    body: "Format the response in structured markdown. Use ## headers for sections, bullet points for lists, and code blocks for any code or commands. Prioritize scannability over prose readability.",
+    tags: ["output", "markdown"],
+    collection: "Snips",
+    variables: [],
+    outputType: "markdown",
+    preferredModel: "claude-sonnet",
+    favorite: false,
+    status: "active",
+    category: "snip",
+    subcategory: "output",
+    createdAt: "2026-01-09T09:00:00.000Z",
+    updatedAt: "2026-01-09T09:00:00.000Z",
+    lastUsedAt: "2026-03-04T08:09:00.000Z",
+    useCount: 67,
+    versions: []
+  },
+  {
+    id: "snip-output-003",
+    title: "Action Item Table",
+    summary: "End every response with an owner-tagged action table.",
+    body: "At the end of your response, include a table with columns: Action | Owner | Due Date | Priority. Populate it with all actionable items identified in your analysis.",
+    tags: ["output", "ops"],
+    collection: "Snips",
+    variables: [],
+    outputType: "table",
+    preferredModel: "gpt-4.1",
+    favorite: false,
+    status: "active",
+    category: "snip",
+    subcategory: "output",
+    createdAt: "2026-02-05T09:00:00.000Z",
+    updatedAt: "2026-02-05T09:00:00.000Z",
+    lastUsedAt: "2026-02-19T18:10:00.000Z",
+    useCount: 31,
+    versions: []
+  },
+
+  // ── Rules Snips ──────────────────────────────────────────────────────────
+  {
+    id: "snip-rules-001",
+    title: "No Filler Words",
+    summary: "Prohibit filler language — every word must earn its place.",
+    body: "Never use filler phrases: 'Certainly!', 'Great question!', 'Of course', 'It's important to note that', 'As an AI', 'I'd be happy to'. Every sentence must contain substantive content.",
+    tags: ["rules", "quality"],
+    collection: "Snips",
+    variables: [],
+    outputType: "markdown",
+    preferredModel: "claude-sonnet",
+    favorite: true,
+    status: "active",
+    category: "snip",
+    subcategory: "rules",
+    createdAt: "2026-01-05T09:00:00.000Z",
+    updatedAt: "2026-01-05T09:00:00.000Z",
+    lastUsedAt: "2026-03-05T14:11:00.000Z",
+    useCount: 118,
+    versions: []
+  },
+  {
+    id: "snip-rules-002",
+    title: "Cite Evidence",
+    summary: "Back every claim with evidence — no unsupported assertions.",
+    body: "Back every claim with evidence from the provided context. If evidence is not available, explicitly say so. Do not make unsupported assertions. Quote or reference specific details.",
+    tags: ["rules", "quality", "research"],
+    collection: "Snips",
+    variables: [],
+    outputType: "markdown",
+    preferredModel: "claude-sonnet",
+    favorite: false,
+    status: "active",
+    category: "snip",
+    subcategory: "rules",
+    createdAt: "2026-01-06T09:00:00.000Z",
+    updatedAt: "2026-01-06T09:00:00.000Z",
+    lastUsedAt: "2026-02-22T10:20:00.000Z",
+    useCount: 44,
+    versions: []
+  },
+
+  // ── Kits ─────────────────────────────────────────────────────────────────
+  {
+    id: "kit-001",
+    title: "Full Code Review Kit",
+    summary: "Complete code review setup: strict reviewer role, citation rules, structured output.",
+    body: "You are a strict code reviewer with 10+ years of experience. You care about correctness, edge cases, test coverage, and long-term maintainability.\n\nRules:\n- Do not give false praise\n- Back every concern with specific file/line evidence\n- Never use filler phrases\n\nReturn findings as a structured list in severity order (Critical → High → Medium → Low). Include:\n- Severity\n- Location (file:line)\n- Issue description\n- Suggested fix\n\nCode to review:\n{{code}}",
+    tags: ["engineering", "review", "quality"],
+    collection: "Kits",
+    variables: ["code"],
+    outputType: "bullet-list",
+    preferredModel: "o4-mini",
+    favorite: true,
+    status: "active",
+    category: "kit",
+    createdAt: "2026-02-20T09:00:00.000Z",
+    updatedAt: "2026-03-01T09:00:00.000Z",
+    lastUsedAt: "2026-03-05T14:11:00.000Z",
+    useCount: 48,
+    versions: []
+  },
+  {
+    id: "kit-002",
+    title: "Executive Summary Kit",
+    summary: "Turn dense content into a sharp exec summary with decisions and next steps.",
+    body: "Write for a C-level audience. Use BLUF structure. Be direct and concise — no filler words, no hedging.\n\nFrom the content below, produce:\n1. One-paragraph executive summary (50 words max)\n2. Key decisions required (bullet list)\n3. Recommended next steps with owners\n\nContent:\n{{content}}",
+    tags: ["communication", "leadership"],
+    collection: "Kits",
+    variables: ["content"],
+    outputType: "markdown",
+    preferredModel: "gpt-4o",
+    favorite: false,
+    status: "active",
+    category: "kit",
+    createdAt: "2026-02-22T09:00:00.000Z",
+    updatedAt: "2026-02-22T09:00:00.000Z",
+    lastUsedAt: "2026-03-04T08:09:00.000Z",
+    useCount: 19,
+    versions: []
   }
 ];

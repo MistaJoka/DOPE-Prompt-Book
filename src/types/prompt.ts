@@ -4,6 +4,10 @@ export type OutputType = "markdown" | "json" | "bullet-list" | "email" | "table"
 
 export type PreferredModel = "gpt-4.1" | "gpt-4o" | "o4-mini" | "claude-sonnet" | "gemini-pro";
 
+export type PromptCategory = "snip" | "recipe" | "kit";
+
+export type SnipSubcategory = "role" | "tone" | "output" | "rules";
+
 export type PromptVersion = {
   id: string;
   body: string;
@@ -23,6 +27,8 @@ export type PromptItem = {
   preferredModel: PreferredModel;
   favorite: boolean;
   status: PromptStatus;
+  category: PromptCategory;
+  subcategory?: SnipSubcategory;
   createdAt: string;
   updatedAt: string;
   lastUsedAt: string;
@@ -30,26 +36,25 @@ export type PromptItem = {
   versions: PromptVersion[];
 };
 
-export type ViewMode = "grid" | "list" | "compact";
+export type ComposerBlock = {
+  instanceId: string;
+  promptId: string;
+  title: string;
+  category: PromptCategory;
+  subcategory?: SnipSubcategory;
+  body: string;
+  isExpanded: boolean;
+};
+
+export type LibraryTab = "snips" | "recipes" | "kits";
 
 export type SortMode = "recently-edited" | "recently-used" | "most-used" | "alphabetical";
 
-export type PromptFilters = {
-  tags: string[];
-  collection: string[];
-  status: PromptStatus[];
-  preferredModel: PreferredModel[];
-  outputType: OutputType[];
-};
-
-export type PromptScope = "all" | "favorites" | "recent" | "collections" | "drafts" | "archived";
-
 export type WorkspaceState = {
   prompts: PromptItem[];
-  selectedPromptId: string | null;
-  query: string;
-  filters: PromptFilters;
+  composerBlocks: ComposerBlock[];
+  libraryDrawerOpen: boolean;
+  libraryTab: LibraryTab;
+  librarySearch: string;
   sort: SortMode;
-  view: ViewMode;
-  scope: PromptScope;
 };

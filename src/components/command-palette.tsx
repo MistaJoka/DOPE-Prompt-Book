@@ -1,119 +1,156 @@
-import { useEffect, useMemo, useState } from "react";
+"use client";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useEffect, useRef, useState } from "react";
+import { Plus, Search } from "lucide-react";
 import { PromptItem } from "@/types/prompt";
+import { categoryLabel } from "@/lib/prompt-store";
 
-type CommandPaletteProps = {
+interface CommandPaletteProps {
   open: boolean;
   prompts: PromptItem[];
-  selectedPrompt: PromptItem | null;
   onClose: () => void;
-  onJumpToPrompt: (promptId: string) => void;
-  onCreatePrompt: () => void;
-  onDuplicateSelected: () => void;
-  onToggleFavoriteSelected: () => void;
-};
+  onAddToComposer: (prompt: PromptItem) => void;
+  onNewPrompt: () => void;
+}
 
 export function CommandPalette({
   open,
   prompts,
-  selectedPrompt,
   onClose,
-  onJumpToPrompt,
-  onCreatePrompt,
-  onDuplicateSelected,
-  onToggleFavoriteSelected
-}: CommandPaletteProps){
+  onAddToComposer,
+  onNewPrompt
+}: CommandPaletteProps) {
   const [query, setQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!open) {
+    if (open) {
       setQuery("");
+      setActiveIndex(0);
+      setTimeout(() => inputRef.current?.focus(), 0);
     }
   }, [open]);
 
-  const visiblePrompts = useMemo(() => {
-    const lower = query.toLowerCase().trim();
-    return prompts
-      .filter((prompt) =>
-        lower ? `${prompt.title} ${prompt.summary}`.toLowerCase().includes(lower) : true
-      )
-      .slice(0, 8);
-  }, [prompts, query]);
+  const filtered = query.trim()
+    ? prompts
+        .filter((p) => p.status !== "archived")
+        .filter((p) =>
+          [p.title, p.summary, p.tags.join(" "), p.collection]
+            .join(" ")
+            .toLowerCase()
+            .includes(query.toLowerCase())
+        )
+        .slice(0, 8)
+    : prompts
+        .filter((p) => p.status !== "archived")
+        .sort((a, b) => +new Date(b.lastUsedAt) - +new Date(a.lastUsedAt))
+        .slice(0, 8);
 
-  if (!open) {
-    return null;
-  }
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [query]);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.min(i + 1, filtered.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const target = filtered[activeIndex];
+      if (target) {
+        onAddToComposer(target);
+        onClose();
+      }
+    } else if (e.key === "Escape") {
+      onClose();
+    }
+  };
+
+  // Scroll active item into view
+  useEffect(() => {
+    const item = listRef.current?.children[activeIndex] as HTMLElement | undefined;
+    item?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex]);
+
+  if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 pt-[10vh]">
-      <div className="w-full max-w-2xl rounded-xl border border-border bg-[#11171c] shadow-soft">
-        <div className="border-b border-border/70 p-3">
-          <Input
-            autoFocus
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] bg-black/60"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg bg-[#1a2128] border border-white/[0.08] rounded-xl shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Search input */}
+        <div className="flex items-center gap-2.5 px-4 py-3 border-b border-white/[0.06]">
+          <Search size={15} className="text-white/30 shrink-0" />
+          <input
+            ref={inputRef}
+            type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Jump to prompt, run action..."
+            onKeyDown={handleKeyDown}
+            placeholder="Search prompts to add…"
+            className="flex-1 bg-transparent text-sm text-white/90 placeholder:text-white/30 focus:outline-none"
           />
+          <kbd className="text-[10px] text-white/25 bg-white/[0.05] px-1.5 py-0.5 rounded font-mono">
+            esc
+          </kbd>
         </div>
 
-        <div className="max-h-[65vh] overflow-y-auto p-2">
-          <p className="px-2 py-1 text-[11px] uppercase tracking-wide text-muted-foreground">Actions</p>
-          <button
-            type="button"
-            className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-accent"
-            onClick={() => {
-              onCreatePrompt();
-              onClose();
-            }}
-          >
-            Create Prompt
-          </button>
-          <button
-            type="button"
-            className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-accent"
-            onClick={() => {
-              onDuplicateSelected();
-              onClose();
-            }}
-            disabled={!selectedPrompt}
-          >
-            Duplicate Selected Prompt
-          </button>
-          <button
-            type="button"
-            className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-accent"
-            onClick={() => {
-              onToggleFavoriteSelected();
-              onClose();
-            }}
-            disabled={!selectedPrompt}
-          >
-            Toggle Favorite on Selected
-          </button>
-
-          <p className="mt-3 px-2 py-1 text-[11px] uppercase tracking-wide text-muted-foreground">Jump to Prompt</p>
-          {visiblePrompts.map((prompt) => (
-            <button
-              key={prompt.id}
-              type="button"
-              className="w-full rounded-md px-3 py-2 text-left hover:bg-accent"
-              onClick={() => {
-                onJumpToPrompt(prompt.id);
-                onClose();
-              }}
-            >
-              <p className="text-sm font-medium">{prompt.title}</p>
-              <p className="line-clamp-1 text-xs text-muted-foreground">{prompt.summary}</p>
-            </button>
-          ))}
+        {/* Results */}
+        <div ref={listRef} className="max-h-72 overflow-y-auto py-1">
+          {filtered.length === 0 ? (
+            <p className="px-4 py-6 text-sm text-white/30 text-center">No results</p>
+          ) : (
+            filtered.map((prompt, index) => (
+              <button
+                key={prompt.id}
+                onClick={() => {
+                  onAddToComposer(prompt);
+                  onClose();
+                }}
+                className={`w-full text-left px-4 py-2.5 flex items-start gap-3 transition-colors ${
+                  index === activeIndex ? "bg-indigo-600/20" : "hover:bg-white/[0.04]"
+                }`}
+              >
+                <span className="shrink-0 mt-0.5 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-white/[0.06] text-white/40">
+                  {categoryLabel(prompt.category, prompt.subcategory)}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white/85 truncate">{prompt.title}</p>
+                  <p className="text-xs text-white/35 truncate mt-0.5">{prompt.summary}</p>
+                </div>
+                {index === activeIndex && (
+                  <span className="shrink-0 text-[10px] text-white/30 bg-white/[0.05] px-1.5 py-0.5 rounded font-mono mt-0.5">
+                    ↵ add
+                  </span>
+                )}
+              </button>
+            ))
+          )}
         </div>
 
-        <div className="flex justify-end border-t border-border/70 p-2">
-          <Button variant="ghost" onClick={onClose}>
-            Close
-          </Button>
+        {/* Footer */}
+        <div className="border-t border-white/[0.06] px-4 py-2 flex items-center justify-between">
+          <span className="text-xs text-white/25">↑↓ navigate · ↵ add to composer</span>
+          <button
+            onClick={() => {
+              onNewPrompt();
+              onClose();
+            }}
+            className="flex items-center gap-1 text-xs text-white/40 hover:text-white/70 transition-colors"
+          >
+            <Plus size={12} />
+            New prompt
+          </button>
         </div>
       </div>
     </div>

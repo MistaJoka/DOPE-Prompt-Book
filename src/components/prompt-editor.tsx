@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PromptItem } from "@/types/prompt";
+import { PromptCategory, PromptItem, SnipSubcategory } from "@/types/prompt";
 
 type PromptEditorProps = {
   open: boolean;
@@ -23,6 +23,8 @@ type EditorForm = {
   preferredModel: PromptItem["preferredModel"];
   favorite: boolean;
   status: PromptItem["status"];
+  category: PromptCategory;
+  subcategory: SnipSubcategory | "";
 };
 
 function toForm(prompt: PromptItem | null): EditorForm {
@@ -36,7 +38,9 @@ function toForm(prompt: PromptItem | null): EditorForm {
     outputType: prompt?.outputType ?? "markdown",
     preferredModel: prompt?.preferredModel ?? "gpt-4.1",
     favorite: prompt?.favorite ?? false,
-    status: prompt?.status ?? "active"
+    status: prompt?.status ?? "active",
+    category: prompt?.category ?? "recipe",
+    subcategory: prompt?.subcategory ?? ""
   };
 }
 
@@ -145,6 +149,34 @@ export function PromptEditor({ open, prompt, initialBody, onClose, onSave }: Pro
               <option value="archived">archived</option>
             </select>
           </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Category</label>
+            <select
+              className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
+              value={form.category}
+              onChange={(e) => setForm((v) => ({ ...v, category: e.target.value as PromptCategory, subcategory: "" }))}
+            >
+              <option value="recipe">recipe</option>
+              <option value="snip">snip</option>
+              <option value="kit">kit</option>
+            </select>
+          </div>
+          {form.category === "snip" && (
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Snip Type</label>
+              <select
+                className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
+                value={form.subcategory}
+                onChange={(e) => setForm((v) => ({ ...v, subcategory: e.target.value as SnipSubcategory }))}
+              >
+                <option value="">— select —</option>
+                <option value="role">role</option>
+                <option value="tone">tone</option>
+                <option value="output">output</option>
+                <option value="rules">rules</option>
+              </select>
+            </div>
+          )}
           <label className="mt-5 flex items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -177,7 +209,9 @@ export function PromptEditor({ open, prompt, initialBody, onClose, onSave }: Pro
                 outputType: form.outputType,
                 preferredModel: form.preferredModel,
                 favorite: form.favorite,
-                status: form.status
+                status: form.status,
+                category: form.category,
+                subcategory: form.subcategory || undefined
               })
             }
             disabled={!form.title.trim() || !form.body.trim()}
