@@ -48,7 +48,8 @@ export function loadState(): WorkspaceState {
 export function persistState(state: WorkspaceState): void {
   if (typeof window === "undefined") return;
   // Persist everything except the prompts array (always loaded fresh from mock data)
-  const { prompts: _prompts, ...rest } = state;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { prompts, ...rest } = state;
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(rest));
 }
 
