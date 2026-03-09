@@ -1,25 +1,38 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AlertCircle, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 import { CommandPalette } from "@/components/command-palette";
 import { ComposerCanvas } from "@/components/composer-canvas";
 import { LibraryDrawer } from "@/components/library-drawer";
 import { PromptEditor } from "@/components/prompt-editor";
+import { reorderComposerBlocks } from "@/lib/composer";
 import {
-  createInitialState,
-  loadState,
-  persistState
+  archivePrompt as archivePromptRequest,
+  createPrompt,
+  duplicatePrompt as duplicatePromptRequest,
+  fetchPromptDefinitions,
+  updatePrompt
+} from "@/lib/prompt-client";
+import {
+  createInitialWorkspaceState,
+  loadWorkspaceState,
+  mergePromptDefinitions,
+  persistWorkspaceState
 } from "@/lib/prompt-store";
 import {
   ComposerBlock,
+  LibraryFilters,
   LibraryTab,
-  PromptItem,
+  PromptDefinition,
+  PromptMutationInput,
+  PromptRecord,
+  SortMode,
   WorkspaceState
 } from "@/types/prompt";
 
-function makeBlock(prompt: PromptItem): ComposerBlock {
+function makeBlock(prompt: PromptRecord): ComposerBlock {
   return {
     instanceId: `${prompt.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     promptId: prompt.id,
@@ -31,72 +44,121 @@ function makeBlock(prompt: PromptItem): ComposerBlock {
   };
 }
 
+function toMutationInput(prompt: PromptDefinition | PromptRecord): PromptMutationInput {
+  return {
+    title: prompt.title,
+    summary: prompt.summary,
+    body: prompt.body,
+    tags: prompt.tags,
+    collection: prompt.collection,
+    variables: prompt.variables,
+    outputType: prompt.outputType,
+    preferredModel: prompt.preferredModel,
+    favorite: prompt.favorite,
+    status: prompt.status,
+    category: prompt.category,
+    subcategory: prompt.subcategory
+  };
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Something went wrong";
+}
+
 export function AppShell() {
-  const [state, setState] = useState<WorkspaceState>(createInitialState());
+  const [workspaceState, setWorkspaceState] = useState<WorkspaceState>(
+    createInitialWorkspaceState()
+  );
+  const [promptDefinitions, setPromptDefinitions] = useState<PromptDefinition[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const [loadingPrompts, setLoadingPrompts] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
-  const [editingPrompt, setEditingPrompt] = useState<PromptItem | null>(null);
+  const [editingPromptId, setEditingPromptId] = useState<string | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  // Signal to focus library search (incrementing triggers the effect in LibraryDrawer)
   const [focusSearchSignal, setFocusSearchSignal] = useState(0);
 
-  // Load persisted state on mount
   useEffect(() => {
-    setState(loadState());
+    setWorkspaceState(loadWorkspaceState());
     setHydrated(true);
   }, []);
 
-  // Persist state changes
   useEffect(() => {
-    if (!hydrated) return;
-    persistState(state);
-  }, [state, hydrated]);
+    if (!hydrated) {
+      return;
+    }
 
-  // ── Keyboard shortcuts ──────────────────────────────────────────────────
+    persistWorkspaceState(workspaceState);
+  }, [workspaceState, hydrated]);
+
+  const loadPrompts = useCallback(async () => {
+    setLoadingPrompts(true);
+    setLoadError(null);
+
+    try {
+      const prompts = await fetchPromptDefinitions();
+      setPromptDefinitions(prompts);
+    } catch (error) {
+      setLoadError(errorMessage(error));
+    } finally {
+      setLoadingPrompts(false);
+    }
+  }, []);
+
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      const meta = e.metaKey || e.ctrlKey;
-      const tag = (e.target as HTMLElement).tagName;
+    void loadPrompts();
+  }, [loadPrompts]);
+
+  const prompts = useMemo(
+    () => mergePromptDefinitions(promptDefinitions, workspaceState.promptUsage),
+    [promptDefinitions, workspaceState.promptUsage]
+  );
+  const editingPrompt = useMemo(
+    () =>
+      editingPromptId
+        ? promptDefinitions.find((prompt) => prompt.id === editingPromptId) ?? null
+        : null,
+    [editingPromptId, promptDefinitions]
+  );
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const meta = event.metaKey || event.ctrlKey;
+      const tag = (event.target as HTMLElement).tagName;
       const inInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 
-      // Cmd+K — open command palette
-      if (meta && e.key.toLowerCase() === "k") {
-        e.preventDefault();
+      if (meta && event.key.toLowerCase() === "k") {
+        event.preventDefault();
         setCommandPaletteOpen(true);
         return;
       }
 
-      // / — focus library search (when not in an input)
-      if (e.key === "/" && !inInput && !commandPaletteOpen) {
-        e.preventDefault();
-        // Open drawer if closed, then focus search
-        setState((prev) => ({ ...prev, libraryDrawerOpen: true }));
-        setFocusSearchSignal((n) => n + 1);
+      if (event.key === "/" && !inInput && !commandPaletteOpen) {
+        event.preventDefault();
+        setWorkspaceState((previous) => ({ ...previous, libraryDrawerOpen: true }));
+        setFocusSearchSignal((value) => value + 1);
         return;
       }
 
-      // Escape — clear command palette or close it
-      if (e.key === "Escape") {
+      if (event.key === "Escape") {
         setCommandPaletteOpen(false);
         return;
       }
 
-      // Cmd+Backspace — remove last composer block
-      if (meta && e.key === "Backspace" && !inInput) {
-        e.preventDefault();
-        setState((prev) => ({
-          ...prev,
-          composerBlocks: prev.composerBlocks.slice(0, -1)
+      if (meta && event.key === "Backspace" && !inInput) {
+        event.preventDefault();
+        setWorkspaceState((previous) => ({
+          ...previous,
+          composerBlocks: previous.composerBlocks.slice(0, -1)
         }));
         return;
       }
 
-      // Cmd+Shift+M — open new prompt editor
-      if (meta && e.shiftKey && e.key.toLowerCase() === "m") {
-        e.preventDefault();
-        setEditingPrompt(null);
+      if (meta && event.shiftKey && event.key.toLowerCase() === "m") {
+        event.preventDefault();
+        setEditingPromptId(null);
         setEditorOpen(true);
-        return;
       }
     };
 
@@ -104,170 +166,213 @@ export function AppShell() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [commandPaletteOpen]);
 
-  // ── Composer actions ────────────────────────────────────────────────────
-  const addToComposer = useCallback((prompt: PromptItem) => {
-    setState((prev) => ({
-      ...prev,
-      prompts: prev.prompts.map((p) =>
-        p.id === prompt.id
-          ? { ...p, lastUsedAt: new Date().toISOString(), useCount: p.useCount + 1 }
-          : p
-      ),
-      composerBlocks: [...prev.composerBlocks, makeBlock(prompt)]
-    }));
+  const upsertPromptDefinition = useCallback((prompt: PromptDefinition) => {
+    setPromptDefinitions((previous) => {
+      const existingIndex = previous.findIndex((candidate) => candidate.id === prompt.id);
+
+      if (existingIndex === -1) {
+        return [prompt, ...previous];
+      }
+
+      return previous.map((candidate) => (candidate.id === prompt.id ? prompt : candidate));
+    });
+  }, []);
+
+  const addToComposer = useCallback((prompt: PromptRecord) => {
+    const now = new Date().toISOString();
+
+    setWorkspaceState((previous) => {
+      const usage = previous.promptUsage[prompt.id] ?? { useCount: 0, lastUsedAt: null };
+
+      return {
+        ...previous,
+        promptUsage: {
+          ...previous.promptUsage,
+          [prompt.id]: {
+            lastUsedAt: now,
+            useCount: usage.useCount + 1
+          }
+        },
+        composerBlocks: [...previous.composerBlocks, makeBlock(prompt)]
+      };
+    });
   }, []);
 
   const toggleExpand = useCallback((instanceId: string) => {
-    setState((prev) => ({
-      ...prev,
-      composerBlocks: prev.composerBlocks.map((b) =>
-        b.instanceId === instanceId ? { ...b, isExpanded: !b.isExpanded } : b
+    setWorkspaceState((previous) => ({
+      ...previous,
+      composerBlocks: previous.composerBlocks.map((block) =>
+        block.instanceId === instanceId
+          ? { ...block, isExpanded: !block.isExpanded }
+          : block
       )
     }));
   }, []);
 
   const removeBlock = useCallback((instanceId: string) => {
-    setState((prev) => ({
-      ...prev,
-      composerBlocks: prev.composerBlocks.filter((b) => b.instanceId !== instanceId)
+    setWorkspaceState((previous) => ({
+      ...previous,
+      composerBlocks: previous.composerBlocks.filter(
+        (block) => block.instanceId !== instanceId
+      )
     }));
   }, []);
 
   const updateBlockBody = useCallback((instanceId: string, body: string) => {
-    setState((prev) => ({
-      ...prev,
-      composerBlocks: prev.composerBlocks.map((b) =>
-        b.instanceId === instanceId ? { ...b, body } : b
+    setWorkspaceState((previous) => ({
+      ...previous,
+      composerBlocks: previous.composerBlocks.map((block) =>
+        block.instanceId === instanceId ? { ...block, body } : block
       )
     }));
   }, []);
 
-  const reorderBlocks = useCallback((from: number, to: number) => {
-    setState((prev) => {
-      const blocks = [...prev.composerBlocks];
-      const [moved] = blocks.splice(from, 1);
-      blocks.splice(to, 0, moved);
-      return { ...prev, composerBlocks: blocks };
-    });
+  const reorderBlocks = useCallback((fromIndex: number, toIndex: number) => {
+    setWorkspaceState((previous) => ({
+      ...previous,
+      composerBlocks: reorderComposerBlocks(previous.composerBlocks, fromIndex, toIndex)
+    }));
   }, []);
 
   const clearComposer = useCallback(() => {
-    setState((prev) => ({ ...prev, composerBlocks: [] }));
-  }, []);
-
-  // ── Prompt management ───────────────────────────────────────────────────
-  const archivePrompt = useCallback((id: string) => {
-    setState((prev) => ({
-      ...prev,
-      prompts: prev.prompts.map((p) =>
-        p.id === id ? { ...p, status: "archived", updatedAt: new Date().toISOString() } : p
-      )
-    }));
+    setWorkspaceState((previous) => ({ ...previous, composerBlocks: [] }));
   }, []);
 
   const savePrompt = useCallback(
-    (payload: Omit<PromptItem, "id" | "createdAt" | "updatedAt" | "lastUsedAt" | "useCount" | "versions">) => {
-      const now = new Date().toISOString();
+    async (payload: PromptMutationInput) => {
+      const prompt = editingPrompt
+        ? await updatePrompt(editingPrompt.id, payload)
+        : await createPrompt(payload);
 
-      if (editingPrompt) {
-        setState((prev) => ({
-          ...prev,
-          prompts: prev.prompts.map((p) =>
-            p.id === editingPrompt.id
-              ? {
-                  ...p,
-                  ...payload,
-                  updatedAt: now,
-                  versions: [
-                    { id: `v-${Date.now()}`, body: p.body, updatedAt: now, note: "Edited" },
-                    ...p.versions
-                  ]
-                }
-              : p
-          )
-        }));
-      } else {
-        const created: PromptItem = {
-          id: `prompt-${Math.random().toString(36).slice(2, 9)}`,
-          createdAt: now,
-          updatedAt: now,
-          lastUsedAt: now,
-          useCount: 0,
-          versions: [{ id: `v-${Date.now()}`, body: payload.body, updatedAt: now, note: "Initial" }],
-          ...payload
-        };
-        setState((prev) => ({ ...prev, prompts: [created, ...prev.prompts] }));
-      }
-
+      upsertPromptDefinition(prompt);
       setEditorOpen(false);
-      setEditingPrompt(null);
+      setEditingPromptId(null);
+      setActionError(null);
     },
-    [editingPrompt]
+    [editingPrompt, upsertPromptDefinition]
   );
 
-  const openEditPrompt = useCallback((prompt: PromptItem) => {
-    setEditingPrompt(prompt);
+  const openEditPrompt = useCallback((prompt: PromptRecord) => {
+    setEditingPromptId(prompt.id);
     setEditorOpen(true);
   }, []);
 
   const openNewPrompt = useCallback(() => {
-    setEditingPrompt(null);
+    setEditingPromptId(null);
     setEditorOpen(true);
   }, []);
 
-  // ── Library drawer state ────────────────────────────────────────────────
+  const handleDuplicatePrompt = useCallback(async (prompt: PromptRecord) => {
+    try {
+      const duplicatedPrompt = await duplicatePromptRequest(prompt.id);
+      upsertPromptDefinition(duplicatedPrompt);
+      setEditingPromptId(duplicatedPrompt.id);
+      setEditorOpen(true);
+      setActionError(null);
+    } catch (error) {
+      setActionError(errorMessage(error));
+    }
+  }, [upsertPromptDefinition]);
+
+  const handleArchivePrompt = useCallback(async (prompt: PromptRecord) => {
+    try {
+      const archivedPrompt = await archivePromptRequest(prompt.id);
+      upsertPromptDefinition(archivedPrompt);
+      setActionError(null);
+    } catch (error) {
+      setActionError(errorMessage(error));
+    }
+  }, [upsertPromptDefinition]);
+
+  const handleToggleFavorite = useCallback(async (prompt: PromptRecord) => {
+    try {
+      const updatedPrompt = await updatePrompt(prompt.id, {
+        ...toMutationInput(prompt),
+        favorite: !prompt.favorite
+      });
+
+      upsertPromptDefinition(updatedPrompt);
+      setActionError(null);
+    } catch (error) {
+      setActionError(errorMessage(error));
+    }
+  }, [upsertPromptDefinition]);
+
   const setLibraryTab = useCallback((tab: LibraryTab) => {
-    setState((prev) => ({ ...prev, libraryTab: tab }));
+    setWorkspaceState((previous) => ({ ...previous, libraryTab: tab }));
   }, []);
 
   const setLibrarySearch = useCallback((search: string) => {
-    setState((prev) => ({ ...prev, librarySearch: search }));
+    setWorkspaceState((previous) => ({ ...previous, librarySearch: search }));
+  }, []);
+
+  const setSort = useCallback((sort: SortMode) => {
+    setWorkspaceState((previous) => ({ ...previous, sort }));
+  }, []);
+
+  const setFilters = useCallback((filters: LibraryFilters) => {
+    setWorkspaceState((previous) => ({ ...previous, filters }));
   }, []);
 
   const toggleDrawer = useCallback(() => {
-    setState((prev) => ({ ...prev, libraryDrawerOpen: !prev.libraryDrawerOpen }));
+    setWorkspaceState((previous) => ({
+      ...previous,
+      libraryDrawerOpen: !previous.libraryDrawerOpen
+    }));
   }, []);
 
   return (
-    <div className="flex h-screen bg-[#0f1317] text-white overflow-hidden">
-      {/* Top bar */}
-      <div className="absolute top-0 left-0 right-0 h-10 flex items-center px-3 gap-2 z-10 border-b border-white/[0.04] bg-[#0f1317]">
+    <div className="flex h-screen overflow-hidden bg-[#0f1317] text-white">
+      <div className="absolute left-0 right-0 top-0 z-10 flex h-10 items-center gap-2 border-b border-white/[0.04] bg-[#0f1317] px-3">
         <button
           onClick={toggleDrawer}
-          className="p-1.5 rounded-md text-white/30 hover:text-white/60 hover:bg-white/[0.05] transition-colors"
-          title={state.libraryDrawerOpen ? "Close library" : "Open library"}
+          className="rounded-md p-1.5 text-white/30 transition-colors hover:bg-white/[0.05] hover:text-white/60"
+          title={workspaceState.libraryDrawerOpen ? "Close library" : "Open library"}
         >
-          {state.libraryDrawerOpen ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
+          {workspaceState.libraryDrawerOpen ? (
+            <PanelLeftClose size={16} />
+          ) : (
+            <PanelLeftOpen size={16} />
+          )}
         </button>
-        <span className="text-xs font-semibold tracking-widest text-white/20 uppercase select-none">
+        <span className="select-none text-xs font-semibold uppercase tracking-widest text-white/20">
           DOPE
+        </span>
+        <span className="ml-auto text-[11px] text-white/25">
+          {loadingPrompts ? "Loading library..." : `${promptDefinitions.length} prompts`}
         </span>
       </div>
 
-      {/* Main content below topbar */}
-      <div className="flex flex-1 min-h-0 pt-10">
-        {/* Library Drawer */}
-        {state.libraryDrawerOpen && (
-          <div className="w-72 shrink-0 h-full overflow-hidden">
+      <div className="flex min-h-0 flex-1 pt-10">
+        {workspaceState.libraryDrawerOpen && (
+          <div className="h-full w-80 shrink-0 overflow-hidden">
             <LibraryDrawer
-              prompts={state.prompts}
-              tab={state.libraryTab}
-              search={state.librarySearch}
+              prompts={prompts}
+              loading={loadingPrompts}
+              error={loadError}
+              tab={workspaceState.libraryTab}
+              search={workspaceState.librarySearch}
+              sort={workspaceState.sort}
+              filters={workspaceState.filters}
               focusSearchSignal={focusSearchSignal}
               onTabChange={setLibraryTab}
               onSearchChange={setLibrarySearch}
+              onSortChange={setSort}
+              onFiltersChange={setFilters}
               onAddToComposer={addToComposer}
               onEditPrompt={openEditPrompt}
-              onArchivePrompt={archivePrompt}
+              onDuplicatePrompt={handleDuplicatePrompt}
+              onToggleFavorite={handleToggleFavorite}
+              onArchivePrompt={handleArchivePrompt}
               onNewPrompt={openNewPrompt}
+              onRetry={loadPrompts}
             />
           </div>
         )}
 
-        {/* Composer Canvas */}
-        <div className="flex-1 min-w-0 h-full overflow-hidden">
+        <div className="min-w-0 flex-1 overflow-hidden">
           <ComposerCanvas
-            blocks={state.composerBlocks}
+            blocks={workspaceState.composerBlocks}
             onToggleExpand={toggleExpand}
             onRemove={removeBlock}
             onBodyChange={updateBlockBody}
@@ -277,21 +382,26 @@ export function AppShell() {
         </div>
       </div>
 
-      {/* Prompt Editor modal */}
+      {(actionError || (!workspaceState.libraryDrawerOpen && loadError)) && (
+        <div className="absolute right-4 top-14 z-10 flex items-center gap-2 rounded-lg border border-red-400/25 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+          <AlertCircle size={13} />
+          {actionError ?? loadError}
+        </div>
+      )}
+
       <PromptEditor
         open={editorOpen}
         prompt={editingPrompt}
         onClose={() => {
           setEditorOpen(false);
-          setEditingPrompt(null);
+          setEditingPromptId(null);
         }}
         onSave={savePrompt}
       />
 
-      {/* Command Palette */}
       <CommandPalette
         open={commandPaletteOpen}
-        prompts={state.prompts}
+        prompts={prompts}
         onClose={() => setCommandPaletteOpen(false)}
         onAddToComposer={addToComposer}
         onNewPrompt={openNewPrompt}

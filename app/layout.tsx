@@ -4,8 +4,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Prompt Workspace",
-  description: "A local-first prompt management workspace"
+  title: "DOPE Prompt Book",
+  description: "A local-first prompt library and composer"
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

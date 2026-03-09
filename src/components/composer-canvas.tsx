@@ -2,6 +2,11 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { Check, Copy, Layers, Trash2 } from "lucide-react";
+
+import {
+  assemblePrompt,
+  extractVariablesFromBlocks
+} from "@/lib/composer";
 import { ComposerBlock as ComposerBlockType } from "@/types/prompt";
 import { ComposerBlock } from "./composer-block";
 
@@ -12,36 +17,6 @@ interface ComposerCanvasProps {
   onBodyChange: (instanceId: string, body: string) => void;
   onReorder: (from: number, to: number) => void;
   onClearAll: () => void;
-}
-
-// Extract {{variable}} tokens from text, deduped
-function extractVariables(text: string): string[] {
-  const matches = text.matchAll(/\{\{(\w+)\}\}/g);
-  const seen = new Set<string>();
-  const vars: string[] = [];
-  for (const match of matches) {
-    if (!seen.has(match[1])) {
-      seen.add(match[1]);
-      vars.push(match[1]);
-    }
-  }
-  return vars;
-}
-
-function assemblePrompt(
-  blocks: ComposerBlockType[],
-  variables: Record<string, string>
-): string {
-  const parts = blocks.map((b) => {
-    let text = b.body;
-    for (const [key, val] of Object.entries(variables)) {
-      if (val.trim()) {
-        text = text.replaceAll(`{{${key}}}`, val);
-      }
-    }
-    return text;
-  });
-  return parts.join("\n\n");
 }
 
 export function ComposerCanvas({
@@ -57,30 +32,26 @@ export function ComposerCanvas({
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
 
-  // All variables from all blocks, deduped
-  const variables = useMemo(() => {
-    const allText = blocks.map((b) => b.body).join(" ");
-    return extractVariables(allText);
-  }, [blocks]);
+  const variables = useMemo(() => extractVariablesFromBlocks(blocks), [blocks]);
 
   const handleVariableChange = useCallback((key: string, value: string) => {
-    setVariableValues((prev) => ({ ...prev, [key]: value }));
+    setVariableValues((previous) => ({ ...previous, [key]: value }));
   }, []);
 
   const handleCopy = useCallback(async () => {
     const text = assemblePrompt(blocks, variableValues);
+
     await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [blocks, variableValues]);
 
-  // Drag and drop handlers
   const handleDragStart = (index: number) => {
     setDragIndex(index);
   };
 
-  const handleDragOver = (e: React.DragEvent, index: number) => {
-    e.preventDefault();
+  const handleDragOver = (event: React.DragEvent, index: number) => {
+    event.preventDefault();
     setDropIndex(index);
   };
 
@@ -88,6 +59,7 @@ export function ComposerCanvas({
     if (dragIndex !== null && dragIndex !== targetIndex) {
       onReorder(dragIndex, targetIndex);
     }
+
     setDragIndex(null);
     setDropIndex(null);
   };
@@ -100,10 +72,9 @@ export function ComposerCanvas({
   const isEmpty = blocks.length === 0;
 
   return (
-    <div className="flex flex-col h-full bg-[#0f1317]">
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/[0.05] shrink-0">
-        <div className="flex items-center gap-2 text-white/40 text-sm">
+    <div className="flex h-full flex-col bg-[#0f1317]">
+      <div className="flex shrink-0 items-center justify-between border-b border-white/[0.05] px-5 py-3.5">
+        <div className="flex items-center gap-2 text-sm text-white/40">
           <Layers size={14} />
           <span>
             {blocks.length === 0
@@ -118,7 +89,7 @@ export function ComposerCanvas({
           {blocks.length > 0 && (
             <button
               onClick={onClearAll}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-white/30 hover:text-white/60 hover:bg-white/5 transition-colors"
+              className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-white/30 transition-colors hover:bg-white/5 hover:text-white/60"
             >
               <Trash2 size={12} />
               Clear
@@ -127,12 +98,12 @@ export function ComposerCanvas({
           <button
             onClick={handleCopy}
             disabled={blocks.length === 0}
-            className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+            className={`flex items-center gap-2 rounded-md px-4 py-1.5 text-sm font-medium transition-all ${
               blocks.length === 0
-                ? "bg-white/5 text-white/20 cursor-not-allowed"
+                ? "cursor-not-allowed bg-white/5 text-white/20"
                 : copied
                 ? "bg-emerald-600 text-white"
-                : "bg-indigo-600 hover:bg-indigo-500 text-white"
+                : "bg-indigo-600 text-white hover:bg-indigo-500"
             }`}
           >
             {copied ? <Check size={14} /> : <Copy size={14} />}
@@ -141,35 +112,40 @@ export function ComposerCanvas({
         </div>
       </div>
 
-      {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {isEmpty ? (
-          <div className="flex flex-col items-center justify-center h-full text-center px-8 gap-3">
-            <div className="w-12 h-12 rounded-xl bg-white/[0.04] flex items-center justify-center">
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/[0.04]">
               <Layers size={22} className="text-white/20" />
             </div>
             <div>
-              <p className="text-white/50 text-sm font-medium">Your composer is empty</p>
-              <p className="text-white/25 text-xs mt-1">
+              <p className="text-sm font-medium text-white/50">Your composer is empty</p>
+              <p className="mt-1 text-xs text-white/25">
                 Open the library to add pieces, or press{" "}
-                <kbd className="px-1 py-0.5 rounded bg-white/[0.06] text-white/40 text-[10px] font-mono">/</kbd>{" "}
+                <kbd className="rounded bg-white/[0.06] px-1 py-0.5 font-mono text-[10px] text-white/40">
+                  /
+                </kbd>{" "}
                 to search
               </p>
             </div>
           </div>
         ) : (
-          <div className="p-4 flex flex-col gap-2">
+          <div className="flex flex-col gap-2 p-4">
             {blocks.map((block, index) => (
               <div
                 key={block.instanceId}
                 draggable
                 onDragStart={() => handleDragStart(index)}
-                onDragOver={(e) => handleDragOver(e, index)}
+                onDragOver={(event) => handleDragOver(event, index)}
                 onDrop={() => handleDrop(index)}
                 onDragEnd={handleDragEnd}
                 className={`transition-opacity ${
                   dragIndex === index ? "opacity-40" : ""
-                } ${dropIndex === index && dragIndex !== index ? "ring-1 ring-indigo-500 ring-offset-1 ring-offset-[#0f1317] rounded-lg" : ""}`}
+                } ${
+                  dropIndex === index && dragIndex !== index
+                    ? "rounded-lg ring-1 ring-indigo-500 ring-offset-1 ring-offset-[#0f1317]"
+                    : ""
+                }`}
               >
                 <ComposerBlock
                   block={block}
@@ -183,26 +159,27 @@ export function ComposerCanvas({
           </div>
         )}
 
-        {/* Variables section */}
         {!isEmpty && variables.length > 0 && (
-          <div className="mx-4 mb-4 rounded-lg border border-white/[0.06] bg-[#1a2128] overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-white/[0.05]">
-              <span className="text-xs font-semibold text-white/40 uppercase tracking-wide">
+          <div className="mx-4 mb-4 overflow-hidden rounded-lg border border-white/[0.06] bg-[#1a2128]">
+            <div className="border-b border-white/[0.05] px-4 py-2.5">
+              <span className="text-xs font-semibold uppercase tracking-wide text-white/40">
                 Variables
               </span>
             </div>
-            <div className="p-3 flex flex-col gap-2.5">
-              {variables.map((varName) => (
-                <div key={varName} className="flex items-center gap-3">
-                  <label className="text-xs font-mono text-white/50 w-28 shrink-0 truncate">
-                    {varName}
+            <div className="flex flex-col gap-2.5 p-3">
+              {variables.map((variableName) => (
+                <div key={variableName} className="flex items-center gap-3">
+                  <label className="w-28 shrink-0 truncate font-mono text-xs text-white/50">
+                    {variableName}
                   </label>
                   <input
                     type="text"
-                    value={variableValues[varName] ?? ""}
-                    onChange={(e) => handleVariableChange(varName, e.target.value)}
-                    placeholder={`{{${varName}}}`}
-                    className="flex-1 min-w-0 bg-[#0f1317] border border-white/[0.06] rounded-md px-3 py-1.5 text-sm text-white/80 placeholder:text-white/20 focus:outline-none focus:border-white/20 transition-colors"
+                    value={variableValues[variableName] ?? ""}
+                    onChange={(event) =>
+                      handleVariableChange(variableName, event.target.value)
+                    }
+                    placeholder={`{{${variableName}}}`}
+                    className="min-w-0 flex-1 rounded-md border border-white/[0.06] bg-[#0f1317] px-3 py-1.5 text-sm text-white/80 transition-colors placeholder:text-white/20 focus:border-white/20 focus:outline-none"
                   />
                 </div>
               ))}

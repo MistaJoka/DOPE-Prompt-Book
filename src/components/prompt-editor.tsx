@@ -2,14 +2,21 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PromptCategory, PromptItem, SnipSubcategory } from "@/types/prompt";
+import {
+  OUTPUT_TYPES,
+  PREFERRED_MODELS,
+  PROMPT_CATEGORIES,
+  PROMPT_STATUSES,
+  PromptDefinition,
+  PromptMutationInput,
+  SNIP_SUBCATEGORIES
+} from "@/types/prompt";
 
 type PromptEditorProps = {
   open: boolean;
-  prompt: PromptItem | null;
-  initialBody?: string;
+  prompt: PromptDefinition | null;
   onClose: () => void;
-  onSave: (payload: Omit<PromptItem, "id" | "createdAt" | "updatedAt" | "lastUsedAt" | "useCount" | "versions">) => void;
+  onSave: (payload: PromptMutationInput) => Promise<void>;
 };
 
 type EditorForm = {
@@ -19,15 +26,15 @@ type EditorForm = {
   tags: string;
   collection: string;
   variables: string;
-  outputType: PromptItem["outputType"];
-  preferredModel: PromptItem["preferredModel"];
+  outputType: PromptMutationInput["outputType"];
+  preferredModel: PromptMutationInput["preferredModel"];
   favorite: boolean;
-  status: PromptItem["status"];
-  category: PromptCategory;
-  subcategory: SnipSubcategory | "";
+  status: PromptMutationInput["status"];
+  category: PromptMutationInput["category"];
+  subcategory: PromptMutationInput["subcategory"] | "";
 };
 
-function toForm(prompt: PromptItem | null): EditorForm {
+function toForm(prompt: PromptDefinition | null): EditorForm {
   return {
     title: prompt?.title ?? "",
     summary: prompt?.summary ?? "",
@@ -44,25 +51,64 @@ function toForm(prompt: PromptItem | null): EditorForm {
   };
 }
 
-export function PromptEditor({ open, prompt, initialBody, onClose, onSave }: PromptEditorProps){
+function toPayload(form: EditorForm): PromptMutationInput {
+  return {
+    title: form.title.trim(),
+    summary: form.summary.trim(),
+    body: form.body.trim(),
+    tags: form.tags
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean),
+    collection: form.collection.trim(),
+    variables: form.variables
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean),
+    outputType: form.outputType,
+    preferredModel: form.preferredModel,
+    favorite: form.favorite,
+    status: form.status,
+    category: form.category,
+    subcategory: form.category === "snip" ? form.subcategory || undefined : undefined
+  };
+}
+
+export function PromptEditor({ open, prompt, onClose, onSave }: PromptEditorProps) {
   const [form, setForm] = useState<EditorForm>(toForm(prompt));
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const title = useMemo(() => (prompt ? "Edit Prompt" : "New Prompt"), [prompt]);
 
   useEffect(() => {
-    const base = toForm(prompt);
-    setForm(initialBody && !prompt ? { ...base, body: initialBody } : base);
-  }, [prompt, open, initialBody]);
+    setForm(toForm(prompt));
+    setError(null);
+    setIsSaving(false);
+  }, [prompt, open]);
 
   if (!open) {
     return null;
   }
 
+  const payload = toPayload(form);
+  const isDisabled =
+    !payload.title ||
+    !payload.summary ||
+    !payload.body ||
+    !payload.collection ||
+    (payload.category === "snip" && !payload.subcategory);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3">
       <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl border border-border bg-[#11171c] p-4 shadow-soft">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{title}</h2>
-          <Button variant="ghost" onClick={onClose}>
+          <div>
+            <h2 className="text-lg font-semibold">{title}</h2>
+            <p className="text-xs text-white/35">
+              Prompts save into repo files under `prompts/`.
+            </p>
+          </div>
+          <Button variant="ghost" onClick={onClose} disabled={isSaving}>
             Close
           </Button>
         </div>
@@ -70,39 +116,57 @@ export function PromptEditor({ open, prompt, initialBody, onClose, onSave }: Pro
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div className="space-y-1 md:col-span-2">
             <label className="text-xs text-muted-foreground">Title</label>
-            <Input value={form.title} onChange={(e) => setForm((v) => ({ ...v, title: e.target.value }))} />
+            <Input
+              value={form.title}
+              onChange={(event) =>
+                setForm((value) => ({ ...value, title: event.target.value }))
+              }
+            />
           </div>
           <div className="space-y-1 md:col-span-2">
             <label className="text-xs text-muted-foreground">Summary</label>
             <Input
               value={form.summary}
-              onChange={(e) => setForm((v) => ({ ...v, summary: e.target.value }))}
+              onChange={(event) =>
+                setForm((value) => ({ ...value, summary: event.target.value }))
+              }
             />
           </div>
           <div className="space-y-1 md:col-span-2">
             <label className="text-xs text-muted-foreground">Prompt Body</label>
             <textarea
               value={form.body}
-              onChange={(e) => setForm((v) => ({ ...v, body: e.target.value }))}
+              onChange={(event) =>
+                setForm((value) => ({ ...value, body: event.target.value }))
+              }
               className="min-h-48 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm"
             />
           </div>
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">Tags (comma-separated)</label>
-            <Input value={form.tags} onChange={(e) => setForm((v) => ({ ...v, tags: e.target.value }))} />
+            <Input
+              value={form.tags}
+              onChange={(event) =>
+                setForm((value) => ({ ...value, tags: event.target.value }))
+              }
+            />
           </div>
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">Collection</label>
             <Input
               value={form.collection}
-              onChange={(e) => setForm((v) => ({ ...v, collection: e.target.value }))}
+              onChange={(event) =>
+                setForm((value) => ({ ...value, collection: event.target.value }))
+              }
             />
           </div>
           <div className="space-y-1">
             <label className="text-xs text-muted-foreground">Variables (comma-separated)</label>
             <Input
               value={form.variables}
-              onChange={(e) => setForm((v) => ({ ...v, variables: e.target.value }))}
+              onChange={(event) =>
+                setForm((value) => ({ ...value, variables: event.target.value }))
+              }
             />
           </div>
           <div className="space-y-1">
@@ -110,15 +174,18 @@ export function PromptEditor({ open, prompt, initialBody, onClose, onSave }: Pro
             <select
               className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
               value={form.outputType}
-              onChange={(e) =>
-                setForm((v) => ({ ...v, outputType: e.target.value as PromptItem["outputType"] }))
+              onChange={(event) =>
+                setForm((value) => ({
+                  ...value,
+                  outputType: event.target.value as PromptMutationInput["outputType"]
+                }))
               }
             >
-              <option value="markdown">markdown</option>
-              <option value="json">json</option>
-              <option value="bullet-list">bullet-list</option>
-              <option value="email">email</option>
-              <option value="table">table</option>
+              {OUTPUT_TYPES.map((outputType) => (
+                <option key={outputType} value={outputType}>
+                  {outputType}
+                </option>
+              ))}
             </select>
           </div>
           <div className="space-y-1">
@@ -126,15 +193,18 @@ export function PromptEditor({ open, prompt, initialBody, onClose, onSave }: Pro
             <select
               className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
               value={form.preferredModel}
-              onChange={(e) =>
-                setForm((v) => ({ ...v, preferredModel: e.target.value as PromptItem["preferredModel"] }))
+              onChange={(event) =>
+                setForm((value) => ({
+                  ...value,
+                  preferredModel: event.target.value as PromptMutationInput["preferredModel"]
+                }))
               }
             >
-              <option value="gpt-4.1">gpt-4.1</option>
-              <option value="gpt-4o">gpt-4o</option>
-              <option value="o4-mini">o4-mini</option>
-              <option value="claude-sonnet">claude-sonnet</option>
-              <option value="gemini-pro">gemini-pro</option>
+              {PREFERRED_MODELS.map((model) => (
+                <option key={model} value={model}>
+                  {model}
+                </option>
+              ))}
             </select>
           </div>
           <div className="space-y-1">
@@ -142,11 +212,18 @@ export function PromptEditor({ open, prompt, initialBody, onClose, onSave }: Pro
             <select
               className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
               value={form.status}
-              onChange={(e) => setForm((v) => ({ ...v, status: e.target.value as PromptItem["status"] }))}
+              onChange={(event) =>
+                setForm((value) => ({
+                  ...value,
+                  status: event.target.value as PromptMutationInput["status"]
+                }))
+              }
             >
-              <option value="active">active</option>
-              <option value="draft">draft</option>
-              <option value="archived">archived</option>
+              {PROMPT_STATUSES.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
             </select>
           </div>
           <div className="space-y-1">
@@ -154,11 +231,19 @@ export function PromptEditor({ open, prompt, initialBody, onClose, onSave }: Pro
             <select
               className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
               value={form.category}
-              onChange={(e) => setForm((v) => ({ ...v, category: e.target.value as PromptCategory, subcategory: "" }))}
+              onChange={(event) =>
+                setForm((value) => ({
+                  ...value,
+                  category: event.target.value as PromptMutationInput["category"],
+                  subcategory: ""
+                }))
+              }
             >
-              <option value="recipe">recipe</option>
-              <option value="snip">snip</option>
-              <option value="kit">kit</option>
+              {PROMPT_CATEGORIES.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
             </select>
           </div>
           {form.category === "snip" && (
@@ -167,13 +252,19 @@ export function PromptEditor({ open, prompt, initialBody, onClose, onSave }: Pro
               <select
                 className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm"
                 value={form.subcategory}
-                onChange={(e) => setForm((v) => ({ ...v, subcategory: e.target.value as SnipSubcategory }))}
+                onChange={(event) =>
+                  setForm((value) => ({
+                    ...value,
+                    subcategory: event.target.value as EditorForm["subcategory"]
+                  }))
+                }
               >
-                <option value="">— select —</option>
-                <option value="role">role</option>
-                <option value="tone">tone</option>
-                <option value="output">output</option>
-                <option value="rules">rules</option>
+                <option value="">select a subcategory</option>
+                {SNIP_SUBCATEGORIES.map((subcategory) => (
+                  <option key={subcategory} value={subcategory}>
+                    {subcategory}
+                  </option>
+                ))}
               </select>
             </div>
           )}
@@ -181,42 +272,41 @@ export function PromptEditor({ open, prompt, initialBody, onClose, onSave }: Pro
             <input
               type="checkbox"
               checked={form.favorite}
-              onChange={(e) => setForm((v) => ({ ...v, favorite: e.target.checked }))}
+              onChange={(event) =>
+                setForm((value) => ({ ...value, favorite: event.target.checked }))
+              }
             />
             Favorite
           </label>
         </div>
 
+        {error && (
+          <div className="mt-4 rounded-lg border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+            {error}
+          </div>
+        )}
+
         <div className="mt-4 flex justify-end gap-2">
-          <Button variant="ghost" onClick={onClose}>
+          <Button variant="ghost" onClick={onClose} disabled={isSaving}>
             Cancel
           </Button>
           <Button
-            onClick={() =>
-              onSave({
-                title: form.title.trim(),
-                summary: form.summary.trim(),
-                body: form.body,
-                tags: form.tags
-                  .split(",")
-                  .map((tag) => tag.trim())
-                  .filter(Boolean),
-                collection: form.collection.trim(),
-                variables: form.variables
-                  .split(",")
-                  .map((item) => item.trim())
-                  .filter(Boolean),
-                outputType: form.outputType,
-                preferredModel: form.preferredModel,
-                favorite: form.favorite,
-                status: form.status,
-                category: form.category,
-                subcategory: form.subcategory || undefined
-              })
-            }
-            disabled={!form.title.trim() || !form.body.trim()}
+            onClick={async () => {
+              setIsSaving(true);
+              setError(null);
+
+              try {
+                await onSave(payload);
+              } catch (saveError) {
+                setError(
+                  saveError instanceof Error ? saveError.message : "Failed to save prompt"
+                );
+                setIsSaving(false);
+              }
+            }}
+            disabled={isDisabled || isSaving}
           >
-            Save Prompt
+            {isSaving ? "Saving..." : "Save Prompt"}
           </Button>
         </div>
       </div>

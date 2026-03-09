@@ -1,27 +1,37 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Archive,
   ChevronDown,
   ChevronRight,
   Clock,
-  MoreHorizontal,
+  Copy,
+  Pencil,
   Plus,
   Search,
+  SlidersHorizontal,
+  Star,
   X
 } from "lucide-react";
-import {
-  LibraryTab,
-  PromptItem,
-  SnipSubcategory
-} from "@/types/prompt";
+
 import {
   categoryLabel,
+  getLibraryFacets,
   getLibraryItems,
   getRecentlyUsed,
   groupRecipesByCollection,
-  groupSnipsBySubcategory
+  groupSnipsBySubcategory,
+  hasActiveFilters
 } from "@/lib/prompt-store";
+import {
+  LibraryFilters,
+  LibraryTab,
+  PromptRecord,
+  SORT_MODES,
+  SnipSubcategory,
+  SortMode
+} from "@/types/prompt";
 
 const SNIP_ORDER: SnipSubcategory[] = ["role", "tone", "output", "rules"];
 
@@ -31,74 +41,167 @@ const TABS: { id: LibraryTab; label: string }[] = [
   { id: "kits", label: "Kits" }
 ];
 
+const SORT_LABELS: Record<SortMode, string> = {
+  "recently-edited": "Recently edited",
+  "recently-used": "Recently used",
+  "most-used": "Most used",
+  alphabetical: "Alphabetical"
+};
+
+type FilterKey =
+  | "tags"
+  | "collections"
+  | "statuses"
+  | "preferredModels"
+  | "outputTypes";
+
 interface LibraryDrawerProps {
-  prompts: PromptItem[];
+  prompts: PromptRecord[];
+  loading: boolean;
+  error: string | null;
   tab: LibraryTab;
   search: string;
+  sort: SortMode;
+  filters: LibraryFilters;
   focusSearchSignal: number;
   onTabChange: (tab: LibraryTab) => void;
   onSearchChange: (value: string) => void;
-  onAddToComposer: (prompt: PromptItem) => void;
-  onEditPrompt: (prompt: PromptItem) => void;
-  onArchivePrompt: (id: string) => void;
+  onSortChange: (sort: SortMode) => void;
+  onFiltersChange: (filters: LibraryFilters) => void;
+  onAddToComposer: (prompt: PromptRecord) => void;
+  onEditPrompt: (prompt: PromptRecord) => void;
+  onDuplicatePrompt: (prompt: PromptRecord) => void;
+  onToggleFavorite: (prompt: PromptRecord) => void;
+  onArchivePrompt: (prompt: PromptRecord) => void;
   onNewPrompt: () => void;
+  onRetry: () => void;
 }
 
-interface ContextMenu {
-  promptId: string;
-  x: number;
-  y: number;
+function PromptActionButton({
+  label,
+  onClick,
+  children
+}: {
+  label: string;
+  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={label}
+      className="rounded p-1 text-white/35 transition-colors hover:bg-white/[0.06] hover:text-white/75"
+    >
+      {children}
+    </button>
+  );
 }
 
 function PromptRow({
   prompt,
   onAdd,
-  onContextMenu
+  onEdit,
+  onDuplicate,
+  onToggleFavorite,
+  onArchive
 }: {
-  prompt: PromptItem;
-  onAdd: (p: PromptItem) => void;
-  onContextMenu: (e: React.MouseEvent, id: string) => void;
+  prompt: PromptRecord;
+  onAdd: (prompt: PromptRecord) => void;
+  onEdit: (prompt: PromptRecord) => void;
+  onDuplicate: (prompt: PromptRecord) => void;
+  onToggleFavorite: (prompt: PromptRecord) => void;
+  onArchive: (prompt: PromptRecord) => void;
 }) {
-  const [justAdded, setJustAdded] = useState(false);
-
-  const handleAdd = () => {
-    onAdd(prompt);
-    setJustAdded(true);
-    setTimeout(() => setJustAdded(false), 800);
-  };
-
   return (
     <div
       role="button"
       tabIndex={0}
-      onClick={handleAdd}
-      onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-      onContextMenu={(e) => onContextMenu(e, prompt.id)}
-      className={`w-full text-left px-3 py-2.5 rounded-lg transition-all group relative cursor-pointer select-none ${
-        justAdded
-          ? "bg-indigo-600/20 border border-indigo-500/30"
-          : "hover:bg-white/[0.04] border border-transparent"
-      }`}
+      onClick={() => onAdd(prompt)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          onAdd(prompt);
+        }
+      }}
+      className="group relative w-full cursor-pointer rounded-lg border border-transparent px-3 py-2.5 text-left transition-all hover:border-white/[0.06] hover:bg-white/[0.04]"
     >
       <div className="flex items-start gap-2.5">
-        <div className="flex-1 min-w-0">
-          <p className={`text-sm font-medium truncate transition-colors ${
-            justAdded ? "text-indigo-300" : "text-white/80 group-hover:text-white"
-          }`}>
-            {prompt.title}
-          </p>
-          <p className="text-xs text-white/35 truncate mt-0.5">{prompt.summary}</p>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="truncate text-sm font-medium text-white/80 transition-colors group-hover:text-white">
+              {prompt.title}
+            </p>
+            {prompt.favorite && (
+              <Star size={12} className="shrink-0 fill-amber-300 text-amber-300" />
+            )}
+            {prompt.status === "draft" && (
+              <span className="shrink-0 rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-white/35">
+                Draft
+              </span>
+            )}
+            {prompt.status === "archived" && (
+              <span className="shrink-0 rounded bg-red-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-red-300/80">
+                Archived
+              </span>
+            )}
+          </div>
+          <p className="mt-0.5 truncate text-xs text-white/35">{prompt.summary}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-white/25">
+            <span>{categoryLabel(prompt.category, prompt.subcategory)}</span>
+            <span>{prompt.collection}</span>
+            <span>{prompt.preferredModel}</span>
+          </div>
         </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onContextMenu(e, prompt.id);
-          }}
-          className="shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 text-white/30 hover:text-white/60 hover:bg-white/[0.06] transition-all"
-          title="Options"
-        >
-          <MoreHorizontal size={13} />
-        </button>
+
+        <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+          <PromptActionButton
+            label="Add to composer"
+            onClick={(event) => {
+              event.stopPropagation();
+              onAdd(prompt);
+            }}
+          >
+            <Plus size={13} />
+          </PromptActionButton>
+          <PromptActionButton
+            label="Edit prompt"
+            onClick={(event) => {
+              event.stopPropagation();
+              onEdit(prompt);
+            }}
+          >
+            <Pencil size={13} />
+          </PromptActionButton>
+          <PromptActionButton
+            label="Duplicate prompt"
+            onClick={(event) => {
+              event.stopPropagation();
+              onDuplicate(prompt);
+            }}
+          >
+            <Copy size={13} />
+          </PromptActionButton>
+          <PromptActionButton
+            label={prompt.favorite ? "Remove favorite" : "Add favorite"}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleFavorite(prompt);
+            }}
+          >
+            <Star
+              size={13}
+              className={prompt.favorite ? "fill-amber-300 text-amber-300" : undefined}
+            />
+          </PromptActionButton>
+          <PromptActionButton
+            label="Archive prompt"
+            onClick={(event) => {
+              event.stopPropagation();
+              onArchive(prompt);
+            }}
+          >
+            <Archive size={13} />
+          </PromptActionButton>
+        </div>
       </div>
     </div>
   );
@@ -118,38 +221,106 @@ function SectionHeader({
   return (
     <button
       onClick={onToggle}
-      className="w-full flex items-center gap-1.5 px-1 py-1.5 text-left group"
+      className="group flex w-full items-center gap-1.5 px-1 py-1.5 text-left"
     >
       {isOpen ? (
-        <ChevronDown size={12} className="text-white/30 group-hover:text-white/50 transition-colors" />
+        <ChevronDown
+          size={12}
+          className="text-white/30 transition-colors group-hover:text-white/50"
+        />
       ) : (
-        <ChevronRight size={12} className="text-white/30 group-hover:text-white/50 transition-colors" />
+        <ChevronRight
+          size={12}
+          className="text-white/30 transition-colors group-hover:text-white/50"
+        />
       )}
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40 group-hover:text-white/60 transition-colors">
+      <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40 transition-colors group-hover:text-white/60">
         {label}
       </span>
-      <span className="text-[10px] text-white/25 ml-auto">{count}</span>
+      <span className="ml-auto text-[10px] text-white/25">{count}</span>
     </button>
+  );
+}
+
+function FilterGroup({
+  label,
+  options,
+  activeValues,
+  onToggle
+}: {
+  label: string;
+  options: string[];
+  activeValues: string[];
+  onToggle: (value: string) => void;
+}) {
+  if (options.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-white/35">
+        {label}
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((option) => {
+          const isActive = activeValues.includes(option);
+
+          return (
+            <button
+              key={option}
+              onClick={() => onToggle(option)}
+              className={`rounded-full border px-2 py-1 text-[11px] transition-colors ${
+                isActive
+                  ? "border-indigo-400/50 bg-indigo-500/20 text-indigo-100"
+                  : "border-white/[0.08] text-white/45 hover:border-white/[0.14] hover:text-white/75"
+              }`}
+            >
+              {option}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function filterCount(filters: LibraryFilters): number {
+  return (
+    filters.tags.length +
+    filters.collections.length +
+    filters.statuses.length +
+    filters.preferredModels.length +
+    filters.outputTypes.length +
+    (filters.favoritesOnly ? 1 : 0)
   );
 }
 
 export function LibraryDrawer({
   prompts,
+  loading,
+  error,
   tab,
   search,
+  sort,
+  filters,
   focusSearchSignal,
   onTabChange,
   onSearchChange,
+  onSortChange,
+  onFiltersChange,
   onAddToComposer,
   onEditPrompt,
+  onDuplicatePrompt,
+  onToggleFavorite,
   onArchivePrompt,
-  onNewPrompt
+  onNewPrompt,
+  onRetry
 }: LibraryDrawerProps) {
   const searchRef = useRef<HTMLInputElement>(null);
-  const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
-  // Focus search when signal fires
   useEffect(() => {
     if (focusSearchSignal > 0) {
       searchRef.current?.focus();
@@ -157,69 +328,131 @@ export function LibraryDrawer({
     }
   }, [focusSearchSignal]);
 
-  // Close context menu on click outside
-  useEffect(() => {
-    if (!contextMenu) return;
-    const close = () => setContextMenu(null);
-    window.addEventListener("click", close);
-    return () => window.removeEventListener("click", close);
-  }, [contextMenu]);
-
-  const handleContextMenu = (e: React.MouseEvent, promptId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setContextMenu({ promptId, x: e.clientX, y: e.clientY });
-  };
+  const facets = useMemo(() => getLibraryFacets(prompts, tab), [prompts, tab]);
+  const filtered = useMemo(
+    () => getLibraryItems(prompts, tab, search, filters, sort),
+    [prompts, tab, search, filters, sort]
+  );
+  const hasFilters = hasActiveFilters(filters);
+  const recentItems =
+    !search && !hasFilters ? getRecentlyUsed(prompts.filter((prompt) => prompt.category !== "kit")) : [];
 
   const toggleSection = (key: string) => {
-    setCollapsedSections((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
+    setCollapsedSections((previous) => {
+      const next = new Set(previous);
+
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+
       return next;
     });
   };
 
-  const filtered = getLibraryItems(prompts, tab, search);
-  const recentItems = !search ? getRecentlyUsed(prompts) : [];
-  const contextPrompt = contextMenu
-    ? prompts.find((p) => p.id === contextMenu.promptId)
-    : null;
+  const toggleArrayFilter = (key: FilterKey, value: string) => {
+    const activeValues = filters[key] as string[];
+    const nextValues = activeValues.includes(value)
+      ? activeValues.filter((entry) => entry !== value)
+      : [...activeValues, value];
+
+    onFiltersChange({
+      ...filters,
+      [key]: nextValues
+    } as LibraryFilters);
+  };
 
   const renderContent = () => {
-    if (filtered.length === 0 && search) {
+    if (loading) {
       return (
-        <div className="flex flex-col items-center justify-center py-12 px-4 gap-2">
-          <p className="text-white/30 text-sm">No results for &ldquo;{search}&rdquo;</p>
+        <div className="flex flex-col gap-2 px-1 py-3">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div
+              key={index}
+              className="h-16 animate-pulse rounded-lg border border-white/[0.05] bg-white/[0.03]"
+            />
+          ))}
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div className="flex flex-col items-center justify-center gap-3 px-4 py-12 text-center">
+          <p className="text-sm text-red-200/85">{error}</p>
+          <button
+            onClick={onRetry}
+            className="rounded-md border border-white/[0.08] px-3 py-1.5 text-xs text-white/60 transition-colors hover:border-white/[0.14] hover:text-white/80"
+          >
+            Retry
+          </button>
+        </div>
+      );
+    }
+
+    if (filtered.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center gap-2 px-4 py-12 text-center">
+          <p className="text-sm text-white/30">
+            {search || hasFilters ? "No prompts match the current library view." : "No prompts yet."}
+          </p>
+          {(search || hasFilters) && (
+            <button
+              onClick={() => {
+                onSearchChange("");
+                onFiltersChange({
+                  tags: [],
+                  collections: [],
+                  statuses: [],
+                  preferredModels: [],
+                  outputTypes: [],
+                  favoritesOnly: false
+                });
+              }}
+              className="text-xs text-white/50 transition-colors hover:text-white/75"
+            >
+              Clear search and filters
+            </button>
+          )}
         </div>
       );
     }
 
     if (tab === "snips") {
       const groups = groupSnipsBySubcategory(filtered);
+
       return (
         <div className="flex flex-col gap-1">
-          {SNIP_ORDER.map((sub) => {
-            const items = groups[sub];
-            if (!items.length) return null;
-            const sectionKey = `snip-${sub}`;
+          {SNIP_ORDER.map((subcategory) => {
+            const items = groups[subcategory];
+
+            if (!items.length) {
+              return null;
+            }
+
+            const sectionKey = `snip-${subcategory}`;
             const isOpen = !collapsedSections.has(sectionKey);
+
             return (
-              <div key={sub}>
+              <div key={subcategory}>
                 <SectionHeader
-                  label={sub.charAt(0).toUpperCase() + sub.slice(1)}
+                  label={subcategory.charAt(0).toUpperCase() + subcategory.slice(1)}
                   count={items.length}
                   isOpen={isOpen}
                   onToggle={() => toggleSection(sectionKey)}
                 />
                 {isOpen && (
-                  <div className="flex flex-col gap-0.5 ml-1">
-                    {items.map((p) => (
+                  <div className="ml-1 flex flex-col gap-0.5">
+                    {items.map((prompt) => (
                       <PromptRow
-                        key={p.id}
-                        prompt={p}
+                        key={prompt.id}
+                        prompt={prompt}
                         onAdd={onAddToComposer}
-                        onContextMenu={handleContextMenu}
+                        onEdit={onEditPrompt}
+                        onDuplicate={onDuplicatePrompt}
+                        onToggleFavorite={onToggleFavorite}
+                        onArchive={onArchivePrompt}
                       />
                     ))}
                   </div>
@@ -233,13 +466,15 @@ export function LibraryDrawer({
 
     if (tab === "recipes") {
       const groups = groupRecipesByCollection(filtered);
+
       return (
         <div className="flex flex-col gap-1">
           {Object.entries(groups)
-            .sort(([a], [b]) => a.localeCompare(b))
+            .sort(([left], [right]) => left.localeCompare(right))
             .map(([collection, items]) => {
               const sectionKey = `recipe-${collection}`;
               const isOpen = !collapsedSections.has(sectionKey);
+
               return (
                 <div key={collection}>
                   <SectionHeader
@@ -249,13 +484,16 @@ export function LibraryDrawer({
                     onToggle={() => toggleSection(sectionKey)}
                   />
                   {isOpen && (
-                    <div className="flex flex-col gap-0.5 ml-1">
-                      {items.map((p) => (
+                    <div className="ml-1 flex flex-col gap-0.5">
+                      {items.map((prompt) => (
                         <PromptRow
-                          key={p.id}
-                          prompt={p}
+                          key={prompt.id}
+                          prompt={prompt}
                           onAdd={onAddToComposer}
-                          onContextMenu={handleContextMenu}
+                          onEdit={onEditPrompt}
+                          onDuplicate={onDuplicatePrompt}
+                          onToggleFavorite={onToggleFavorite}
+                          onArchive={onArchivePrompt}
                         />
                       ))}
                     </div>
@@ -267,42 +505,43 @@ export function LibraryDrawer({
       );
     }
 
-    // Kits — flat list
     return (
       <div className="flex flex-col gap-0.5">
-        {filtered.map((p) => (
+        {filtered.map((prompt) => (
           <PromptRow
-            key={p.id}
-            prompt={p}
+            key={prompt.id}
+            prompt={prompt}
             onAdd={onAddToComposer}
-            onContextMenu={handleContextMenu}
+            onEdit={onEditPrompt}
+            onDuplicate={onDuplicatePrompt}
+            onToggleFavorite={onToggleFavorite}
+            onArchive={onArchivePrompt}
           />
         ))}
-        {filtered.length === 0 && (
-          <p className="text-white/25 text-sm px-3 py-4 text-center">No kits yet</p>
-        )}
       </div>
     );
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#12181e] border-r border-white/[0.05]">
-      {/* Search */}
-      <div className="px-3 pt-3 pb-2 shrink-0">
+    <div className="flex h-full flex-col border-r border-white/[0.05] bg-[#12181e]">
+      <div className="shrink-0 px-3 pb-2 pt-3">
         <div className="relative">
-          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/25 pointer-events-none" />
+          <Search
+            size={13}
+            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-white/25"
+          />
           <input
             ref={searchRef}
             type="text"
             value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search pieces…"
-            className="w-full bg-[#0f1317] border border-white/[0.06] rounded-lg pl-8 pr-8 py-1.5 text-sm text-white/80 placeholder:text-white/25 focus:outline-none focus:border-white/15 transition-colors"
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder="Search prompts…"
+            className="w-full rounded-lg border border-white/[0.06] bg-[#0f1317] py-1.5 pl-8 pr-8 text-sm text-white/80 placeholder:text-white/25 transition-colors focus:border-white/15 focus:outline-none"
           />
           {search && (
             <button
               onClick={() => onSearchChange("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/30 transition-colors hover:text-white/60"
             >
               <X size={12} />
             </button>
@@ -310,27 +549,123 @@ export function LibraryDrawer({
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex px-3 pb-2 gap-1 shrink-0">
-        {TABS.map((t) => (
+      <div className="flex shrink-0 gap-1 px-3 pb-2">
+        {TABS.map((item) => (
           <button
-            key={t.id}
-            onClick={() => onTabChange(t.id)}
-            className={`flex-1 py-1 rounded-md text-xs font-medium transition-all ${
-              tab === t.id
+            key={item.id}
+            onClick={() => onTabChange(item.id)}
+            className={`flex-1 rounded-md py-1 text-xs font-medium transition-all ${
+              tab === item.id
                 ? "bg-white/[0.08] text-white/90"
-                : "text-white/35 hover:text-white/60 hover:bg-white/[0.04]"
+                : "text-white/35 hover:bg-white/[0.04] hover:text-white/60"
             }`}
           >
-            {t.label}
+            {item.label}
           </button>
         ))}
       </div>
 
-      {/* Scrollable list */}
-      <div className="flex-1 overflow-y-auto min-h-0 px-2 pb-2">
-        {/* Recently used section (only when search is empty) */}
-        {!search && recentItems.length > 0 && (
+      <div className="shrink-0 border-b border-white/[0.05] px-3 pb-3">
+        <div className="flex items-center gap-2">
+          <select
+            value={sort}
+            onChange={(event) => onSortChange(event.target.value as SortMode)}
+            className="h-8 flex-1 rounded-md border border-white/[0.06] bg-[#0f1317] px-2 text-xs text-white/70 focus:border-white/15 focus:outline-none"
+          >
+            {SORT_MODES.map((mode) => (
+              <option key={mode} value={mode}>
+                {SORT_LABELS[mode]}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={() => setFiltersOpen((open) => !open)}
+            className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
+              filtersOpen || hasFilters
+                ? "border-indigo-400/35 bg-indigo-500/10 text-indigo-100"
+                : "border-white/[0.08] text-white/45 hover:border-white/[0.14] hover:text-white/70"
+            }`}
+          >
+            <SlidersHorizontal size={12} />
+            Filters{filterCount(filters) > 0 ? ` · ${filterCount(filters)}` : ""}
+          </button>
+        </div>
+
+        {filtersOpen && (
+          <div className="mt-3 space-y-3 rounded-lg border border-white/[0.06] bg-[#0f1317] p-3">
+            <button
+              onClick={() =>
+                onFiltersChange({
+                  tags: [],
+                  collections: [],
+                  statuses: [],
+                  preferredModels: [],
+                  outputTypes: [],
+                  favoritesOnly: false
+                })
+              }
+              className="text-xs text-white/45 transition-colors hover:text-white/75"
+            >
+              Clear all filters
+            </button>
+
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/35">
+                Favorites
+              </p>
+              <button
+                onClick={() =>
+                  onFiltersChange({
+                    ...filters,
+                    favoritesOnly: !filters.favoritesOnly
+                  })
+                }
+                className={`rounded-full border px-2 py-1 text-[11px] transition-colors ${
+                  filters.favoritesOnly
+                    ? "border-amber-300/40 bg-amber-400/15 text-amber-100"
+                    : "border-white/[0.08] text-white/45 hover:border-white/[0.14] hover:text-white/75"
+                }`}
+              >
+                Favorites only
+              </button>
+            </div>
+
+            <FilterGroup
+              label="Tags"
+              options={facets.tags}
+              activeValues={filters.tags}
+              onToggle={(value) => toggleArrayFilter("tags", value)}
+            />
+            <FilterGroup
+              label="Collection"
+              options={facets.collections}
+              activeValues={filters.collections}
+              onToggle={(value) => toggleArrayFilter("collections", value)}
+            />
+            <FilterGroup
+              label="Status"
+              options={facets.statuses}
+              activeValues={filters.statuses}
+              onToggle={(value) => toggleArrayFilter("statuses", value)}
+            />
+            <FilterGroup
+              label="Model"
+              options={facets.preferredModels}
+              activeValues={filters.preferredModels}
+              onToggle={(value) => toggleArrayFilter("preferredModels", value)}
+            />
+            <FilterGroup
+              label="Output"
+              options={facets.outputTypes}
+              activeValues={filters.outputTypes}
+              onToggle={(value) => toggleArrayFilter("outputTypes", value)}
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+        {!loading && !error && recentItems.length > 0 && (
           <div className="mb-3">
             <div className="flex items-center gap-1.5 px-1 py-1.5">
               <Clock size={11} className="text-white/25" />
@@ -339,12 +674,15 @@ export function LibraryDrawer({
               </span>
             </div>
             <div className="flex flex-col gap-0.5">
-              {recentItems.map((p) => (
+              {recentItems.map((prompt) => (
                 <PromptRow
-                  key={`recent-${p.id}`}
-                  prompt={p}
+                  key={`recent-${prompt.id}`}
+                  prompt={prompt}
                   onAdd={onAddToComposer}
-                  onContextMenu={handleContextMenu}
+                  onEdit={onEditPrompt}
+                  onDuplicate={onDuplicatePrompt}
+                  onToggleFavorite={onToggleFavorite}
+                  onArchive={onArchivePrompt}
                 />
               ))}
             </div>
@@ -355,61 +693,15 @@ export function LibraryDrawer({
         {renderContent()}
       </div>
 
-      {/* Footer */}
-      <div className="shrink-0 px-3 py-2.5 border-t border-white/[0.05]">
+      <div className="shrink-0 border-t border-white/[0.05] px-3 py-2.5">
         <button
           onClick={onNewPrompt}
-          className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium text-white/40 hover:text-white/70 hover:bg-white/[0.04] transition-all border border-transparent hover:border-white/[0.06]"
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-transparent py-1.5 text-xs font-medium text-white/40 transition-all hover:border-white/[0.06] hover:bg-white/[0.04] hover:text-white/70"
         >
           <Plus size={13} />
           New Prompt
         </button>
       </div>
-
-      {/* Context menu */}
-      {contextMenu && contextPrompt && (
-        <div
-          className="fixed z-50 bg-[#1e2832] border border-white/[0.08] rounded-lg shadow-2xl py-1 min-w-[140px]"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="px-3 py-1.5 border-b border-white/[0.06] mb-1">
-            <p className="text-xs font-medium text-white/50 truncate max-w-[150px]">
-              {contextPrompt.title}
-            </p>
-            <p className="text-[10px] text-white/30 mt-0.5">
-              {categoryLabel(contextPrompt.category, contextPrompt.subcategory)}
-            </p>
-          </div>
-          <button
-            onClick={() => {
-              onAddToComposer(contextPrompt);
-              setContextMenu(null);
-            }}
-            className="w-full text-left px-3 py-1.5 text-xs text-white/70 hover:text-white hover:bg-white/[0.06] transition-colors"
-          >
-            Add to composer
-          </button>
-          <button
-            onClick={() => {
-              onEditPrompt(contextPrompt);
-              setContextMenu(null);
-            }}
-            className="w-full text-left px-3 py-1.5 text-xs text-white/70 hover:text-white hover:bg-white/[0.06] transition-colors"
-          >
-            Edit
-          </button>
-          <button
-            onClick={() => {
-              onArchivePrompt(contextPrompt.id);
-              setContextMenu(null);
-            }}
-            className="w-full text-left px-3 py-1.5 text-xs text-red-400/70 hover:text-red-400 hover:bg-red-400/[0.06] transition-colors"
-          >
-            Archive
-          </button>
-        </div>
-      )}
     </div>
   );
 }

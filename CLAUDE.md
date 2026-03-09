@@ -8,4 +8,9 @@ DOPE-Prompt-Book is a library for modular prompt construction. The goal is to bu
 
 ## Current State
 
-This project is in early/planning stage — no code exists yet beyond this documentation. The architecture and tooling described below should be established as development begins.
+This project is a working local MVP.
+
+- Prompt definitions live in repo-backed Markdown files under `prompts/`
+- The Next.js app reads and mutates those prompts through API routes
+- Browser storage is used only for workspace state and prompt usage data
+- The current focus is a single-user, local-first prompt library and composer
