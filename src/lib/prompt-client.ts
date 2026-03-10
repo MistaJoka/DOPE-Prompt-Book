@@ -3,6 +3,29 @@ import {
   PromptMutationInput
 } from "@/types/prompt";
 
+type ErrorPayload = {
+  error?: string;
+  code?: string;
+  action?: string;
+  writeActionsEnabled?: boolean;
+};
+
+export class PromptRequestError extends Error {
+  statusCode: number;
+  code?: string;
+  action?: string;
+  writeActionsEnabled?: boolean;
+
+  constructor(message: string, statusCode: number, payload: ErrorPayload) {
+    super(message);
+    this.name = "PromptRequestError";
+    this.statusCode = statusCode;
+    this.code = payload.code;
+    this.action = payload.action;
+    this.writeActionsEnabled = payload.writeActionsEnabled;
+  }
+}
+
 async function requestJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
     cache: "no-store",
@@ -12,10 +35,10 @@ async function requestJson<T>(input: RequestInfo, init?: RequestInit): Promise<T
       ...(init?.headers ?? {})
     }
   });
-  const payload = (await response.json()) as T & { error?: string };
+  const payload = (await response.json()) as T & ErrorPayload;
 
   if (!response.ok) {
-    throw new Error(payload.error ?? "Request failed");
+    throw new PromptRequestError(payload.error ?? "Request failed", response.status, payload);
   }
 
   return payload;

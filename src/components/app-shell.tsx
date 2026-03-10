@@ -22,6 +22,10 @@ import {
   persistWorkspaceState
 } from "@/lib/prompt-store";
 import {
+  PORTFOLIO_URL,
+  PromptRuntimeConfig
+} from "@/lib/prompt-runtime";
+import {
   ComposerBlock,
   LibraryFilters,
   LibraryTab,
@@ -65,7 +69,11 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong";
 }
 
-export function AppShell() {
+type AppShellProps = {
+  runtimeConfig: PromptRuntimeConfig;
+};
+
+export function AppShell({ runtimeConfig }: AppShellProps) {
   const [workspaceState, setWorkspaceState] = useState<WorkspaceState>(
     createInitialWorkspaceState()
   );
@@ -78,6 +86,8 @@ export function AppShell() {
   const [editingPromptId, setEditingPromptId] = useState<string | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [focusSearchSignal, setFocusSearchSignal] = useState(0);
+  const writeDisabledMessage =
+    runtimeConfig.writeDisabledMessage ?? "Prompt library changes are disabled.";
 
   useEffect(() => {
     setWorkspaceState(loadWorkspaceState());
@@ -157,6 +167,11 @@ export function AppShell() {
 
       if (meta && event.shiftKey && event.key.toLowerCase() === "m") {
         event.preventDefault();
+        if (!runtimeConfig.writeActionsEnabled) {
+          setActionError(writeDisabledMessage);
+          return;
+        }
+
         setEditingPromptId(null);
         setEditorOpen(true);
       }
@@ -164,7 +179,7 @@ export function AppShell() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [commandPaletteOpen]);
+  }, [commandPaletteOpen, runtimeConfig.writeActionsEnabled, writeDisabledMessage]);
 
   const upsertPromptDefinition = useCallback((prompt: PromptDefinition) => {
     setPromptDefinitions((previous) => {
@@ -240,6 +255,10 @@ export function AppShell() {
 
   const savePrompt = useCallback(
     async (payload: PromptMutationInput) => {
+      if (!runtimeConfig.writeActionsEnabled) {
+        throw new Error(writeDisabledMessage);
+      }
+
       const prompt = editingPrompt
         ? await updatePrompt(editingPrompt.id, payload)
         : await createPrompt(payload);
@@ -249,20 +268,35 @@ export function AppShell() {
       setEditingPromptId(null);
       setActionError(null);
     },
-    [editingPrompt, upsertPromptDefinition]
+    [editingPrompt, runtimeConfig.writeActionsEnabled, upsertPromptDefinition, writeDisabledMessage]
   );
 
   const openEditPrompt = useCallback((prompt: PromptRecord) => {
+    if (!runtimeConfig.writeActionsEnabled) {
+      setActionError(writeDisabledMessage);
+      return;
+    }
+
     setEditingPromptId(prompt.id);
     setEditorOpen(true);
-  }, []);
+  }, [runtimeConfig.writeActionsEnabled, writeDisabledMessage]);
 
   const openNewPrompt = useCallback(() => {
+    if (!runtimeConfig.writeActionsEnabled) {
+      setActionError(writeDisabledMessage);
+      return;
+    }
+
     setEditingPromptId(null);
     setEditorOpen(true);
-  }, []);
+  }, [runtimeConfig.writeActionsEnabled, writeDisabledMessage]);
 
   const handleDuplicatePrompt = useCallback(async (prompt: PromptRecord) => {
+    if (!runtimeConfig.writeActionsEnabled) {
+      setActionError(writeDisabledMessage);
+      return;
+    }
+
     try {
       const duplicatedPrompt = await duplicatePromptRequest(prompt.id);
       upsertPromptDefinition(duplicatedPrompt);
@@ -272,9 +306,14 @@ export function AppShell() {
     } catch (error) {
       setActionError(errorMessage(error));
     }
-  }, [upsertPromptDefinition]);
+  }, [runtimeConfig.writeActionsEnabled, upsertPromptDefinition, writeDisabledMessage]);
 
   const handleArchivePrompt = useCallback(async (prompt: PromptRecord) => {
+    if (!runtimeConfig.writeActionsEnabled) {
+      setActionError(writeDisabledMessage);
+      return;
+    }
+
     try {
       const archivedPrompt = await archivePromptRequest(prompt.id);
       upsertPromptDefinition(archivedPrompt);
@@ -282,9 +321,14 @@ export function AppShell() {
     } catch (error) {
       setActionError(errorMessage(error));
     }
-  }, [upsertPromptDefinition]);
+  }, [runtimeConfig.writeActionsEnabled, upsertPromptDefinition, writeDisabledMessage]);
 
   const handleToggleFavorite = useCallback(async (prompt: PromptRecord) => {
+    if (!runtimeConfig.writeActionsEnabled) {
+      setActionError(writeDisabledMessage);
+      return;
+    }
+
     try {
       const updatedPrompt = await updatePrompt(prompt.id, {
         ...toMutationInput(prompt),
@@ -296,7 +340,7 @@ export function AppShell() {
     } catch (error) {
       setActionError(errorMessage(error));
     }
-  }, [upsertPromptDefinition]);
+  }, [runtimeConfig.writeActionsEnabled, upsertPromptDefinition, writeDisabledMessage]);
 
   const setLibraryTab = useCallback((tab: LibraryTab) => {
     setWorkspaceState((previous) => ({ ...previous, libraryTab: tab }));
@@ -338,9 +382,24 @@ export function AppShell() {
         <span className="select-none text-xs font-semibold uppercase tracking-widest text-white/20">
           DOPE
         </span>
-        <span className="ml-auto text-[11px] text-white/25">
-          {loadingPrompts ? "Loading library..." : `${promptDefinitions.length} prompts`}
-        </span>
+        {runtimeConfig.isReadOnlyDemo && runtimeConfig.demoBadgeText && (
+          <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[10px] uppercase tracking-wide text-white/45">
+            {runtimeConfig.demoBadgeText}
+          </span>
+        )}
+        <div className="ml-auto flex items-center gap-3">
+          <a
+            href={PORTFOLIO_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="text-[11px] text-white/25 transition-colors hover:text-white/50"
+          >
+            Portfolio
+          </a>
+          <span className="hidden text-[11px] text-white/25 sm:inline">
+            {loadingPrompts ? "Loading library..." : `${promptDefinitions.length} prompts`}
+          </span>
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1 pt-10">
@@ -365,6 +424,8 @@ export function AppShell() {
               onToggleFavorite={handleToggleFavorite}
               onArchivePrompt={handleArchivePrompt}
               onNewPrompt={openNewPrompt}
+              writeActionsEnabled={runtimeConfig.writeActionsEnabled}
+              writeDisabledMessage={writeDisabledMessage}
               onRetry={loadPrompts}
             />
           </div>
@@ -405,6 +466,8 @@ export function AppShell() {
         onClose={() => setCommandPaletteOpen(false)}
         onAddToComposer={addToComposer}
         onNewPrompt={openNewPrompt}
+        writeActionsEnabled={runtimeConfig.writeActionsEnabled}
+        writeDisabledMessage={writeDisabledMessage}
       />
     </div>
   );

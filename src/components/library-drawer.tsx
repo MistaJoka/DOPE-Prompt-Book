@@ -74,15 +74,19 @@ interface LibraryDrawerProps {
   onToggleFavorite: (prompt: PromptRecord) => void;
   onArchivePrompt: (prompt: PromptRecord) => void;
   onNewPrompt: () => void;
+  writeActionsEnabled: boolean;
+  writeDisabledMessage: string;
   onRetry: () => void;
 }
 
 function PromptActionButton({
   label,
+  disabled = false,
   onClick,
   children
 }: {
   label: string;
+  disabled?: boolean;
   onClick: (event: React.MouseEvent<HTMLButtonElement>) => void;
   children: React.ReactNode;
 }) {
@@ -90,7 +94,12 @@ function PromptActionButton({
     <button
       onClick={onClick}
       title={label}
-      className="rounded p-1 text-white/35 transition-colors hover:bg-white/[0.06] hover:text-white/75"
+      disabled={disabled}
+      className={`rounded p-1 transition-colors ${
+        disabled
+          ? "cursor-not-allowed text-white/15"
+          : "text-white/35 hover:bg-white/[0.06] hover:text-white/75"
+      }`}
     >
       {children}
     </button>
@@ -99,6 +108,8 @@ function PromptActionButton({
 
 function PromptRow({
   prompt,
+  writeActionsEnabled,
+  writeDisabledMessage,
   onAdd,
   onEdit,
   onDuplicate,
@@ -106,6 +117,8 @@ function PromptRow({
   onArchive
 }: {
   prompt: PromptRecord;
+  writeActionsEnabled: boolean;
+  writeDisabledMessage: string;
   onAdd: (prompt: PromptRecord) => void;
   onEdit: (prompt: PromptRecord) => void;
   onDuplicate: (prompt: PromptRecord) => void;
@@ -163,7 +176,8 @@ function PromptRow({
             <Plus size={13} />
           </PromptActionButton>
           <PromptActionButton
-            label="Edit prompt"
+            label={writeActionsEnabled ? "Edit prompt" : writeDisabledMessage}
+            disabled={!writeActionsEnabled}
             onClick={(event) => {
               event.stopPropagation();
               onEdit(prompt);
@@ -172,7 +186,8 @@ function PromptRow({
             <Pencil size={13} />
           </PromptActionButton>
           <PromptActionButton
-            label="Duplicate prompt"
+            label={writeActionsEnabled ? "Duplicate prompt" : writeDisabledMessage}
+            disabled={!writeActionsEnabled}
             onClick={(event) => {
               event.stopPropagation();
               onDuplicate(prompt);
@@ -181,7 +196,14 @@ function PromptRow({
             <Copy size={13} />
           </PromptActionButton>
           <PromptActionButton
-            label={prompt.favorite ? "Remove favorite" : "Add favorite"}
+            label={
+              writeActionsEnabled
+                ? prompt.favorite
+                  ? "Remove favorite"
+                  : "Add favorite"
+                : writeDisabledMessage
+            }
+            disabled={!writeActionsEnabled}
             onClick={(event) => {
               event.stopPropagation();
               onToggleFavorite(prompt);
@@ -193,7 +215,8 @@ function PromptRow({
             />
           </PromptActionButton>
           <PromptActionButton
-            label="Archive prompt"
+            label={writeActionsEnabled ? "Archive prompt" : writeDisabledMessage}
+            disabled={!writeActionsEnabled}
             onClick={(event) => {
               event.stopPropagation();
               onArchive(prompt);
@@ -315,6 +338,8 @@ export function LibraryDrawer({
   onToggleFavorite,
   onArchivePrompt,
   onNewPrompt,
+  writeActionsEnabled,
+  writeDisabledMessage,
   onRetry
 }: LibraryDrawerProps) {
   const searchRef = useRef<HTMLInputElement>(null);
@@ -448,6 +473,8 @@ export function LibraryDrawer({
                       <PromptRow
                         key={prompt.id}
                         prompt={prompt}
+                        writeActionsEnabled={writeActionsEnabled}
+                        writeDisabledMessage={writeDisabledMessage}
                         onAdd={onAddToComposer}
                         onEdit={onEditPrompt}
                         onDuplicate={onDuplicatePrompt}
@@ -489,6 +516,8 @@ export function LibraryDrawer({
                         <PromptRow
                           key={prompt.id}
                           prompt={prompt}
+                          writeActionsEnabled={writeActionsEnabled}
+                          writeDisabledMessage={writeDisabledMessage}
                           onAdd={onAddToComposer}
                           onEdit={onEditPrompt}
                           onDuplicate={onDuplicatePrompt}
@@ -511,6 +540,8 @@ export function LibraryDrawer({
           <PromptRow
             key={prompt.id}
             prompt={prompt}
+            writeActionsEnabled={writeActionsEnabled}
+            writeDisabledMessage={writeDisabledMessage}
             onAdd={onAddToComposer}
             onEdit={onEditPrompt}
             onDuplicate={onDuplicatePrompt}
@@ -678,6 +709,8 @@ export function LibraryDrawer({
                 <PromptRow
                   key={`recent-${prompt.id}`}
                   prompt={prompt}
+                  writeActionsEnabled={writeActionsEnabled}
+                  writeDisabledMessage={writeDisabledMessage}
                   onAdd={onAddToComposer}
                   onEdit={onEditPrompt}
                   onDuplicate={onDuplicatePrompt}
@@ -696,7 +729,13 @@ export function LibraryDrawer({
       <div className="shrink-0 border-t border-white/[0.05] px-3 py-2.5">
         <button
           onClick={onNewPrompt}
-          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-transparent py-1.5 text-xs font-medium text-white/40 transition-all hover:border-white/[0.06] hover:bg-white/[0.04] hover:text-white/70"
+          disabled={!writeActionsEnabled}
+          title={writeActionsEnabled ? "New prompt" : writeDisabledMessage}
+          className={`flex w-full items-center justify-center gap-1.5 rounded-lg border py-1.5 text-xs font-medium transition-all ${
+            writeActionsEnabled
+              ? "border-transparent text-white/40 hover:border-white/[0.06] hover:bg-white/[0.04] hover:text-white/70"
+              : "cursor-not-allowed border-white/[0.03] text-white/20"
+          }`}
         >
           <Plus size={13} />
           New Prompt

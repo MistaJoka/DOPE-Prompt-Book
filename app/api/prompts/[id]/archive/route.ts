@@ -4,6 +4,7 @@ import {
   archivePromptDefinition,
   PromptRepositoryError
 } from "@/lib/prompt-repository";
+import { arePromptWritesEnabled, getBlockedWritePayload } from "@/lib/prompt-runtime";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,6 +23,10 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    if (!arePromptWritesEnabled()) {
+      return NextResponse.json(getBlockedWritePayload("archive"), { status: 403 });
+    }
+
     const { id } = await context.params;
     const prompt = await archivePromptDefinition(id);
 

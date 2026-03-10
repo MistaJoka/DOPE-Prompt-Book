@@ -1,7 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  reactStrictMode: true
+  reactStrictMode: true,
+  outputFileTracingIncludes: {
+    "/api/prompts": ["./prompts/**/*"],
+    "/api/prompts/**": ["./prompts/**/*"]
+  }
 };
 
 export default nextConfig;

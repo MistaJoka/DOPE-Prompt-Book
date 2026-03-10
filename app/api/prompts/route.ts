@@ -5,6 +5,7 @@ import {
   listPromptDefinitions,
   PromptRepositoryError
 } from "@/lib/prompt-repository";
+import { arePromptWritesEnabled, getBlockedWritePayload } from "@/lib/prompt-runtime";
 import { validatePromptCreateInput } from "@/lib/prompt-files";
 
 export const runtime = "nodejs";
@@ -30,6 +31,10 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    if (!arePromptWritesEnabled()) {
+      return NextResponse.json(getBlockedWritePayload("create"), { status: 403 });
+    }
+
     const payload = validatePromptCreateInput(await request.json());
     const prompt = await createPromptDefinition(payload);
 

@@ -5,6 +5,7 @@ import {
   PromptRepositoryError,
   updatePromptDefinition
 } from "@/lib/prompt-repository";
+import { arePromptWritesEnabled, getBlockedWritePayload } from "@/lib/prompt-runtime";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,6 +24,10 @@ export async function PUT(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    if (!arePromptWritesEnabled()) {
+      return NextResponse.json(getBlockedWritePayload("update"), { status: 403 });
+    }
+
     const { id } = await context.params;
     const payload = validatePromptMutationInput(await request.json());
     const prompt = await updatePromptDefinition(id, payload);

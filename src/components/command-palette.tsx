@@ -21,6 +21,8 @@ interface CommandPaletteProps {
   onClose: () => void;
   onAddToComposer: (prompt: PromptRecord) => void;
   onNewPrompt: () => void;
+  writeActionsEnabled: boolean;
+  writeDisabledMessage: string;
 }
 
 export function CommandPalette({
@@ -28,7 +30,9 @@ export function CommandPalette({
   prompts,
   onClose,
   onAddToComposer,
-  onNewPrompt
+  onNewPrompt,
+  writeActionsEnabled,
+  writeDisabledMessage
 }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
@@ -163,7 +167,13 @@ export function CommandPalette({
               onNewPrompt();
               onClose();
             }}
-            className="flex items-center gap-1 text-xs text-white/40 transition-colors hover:text-white/70"
+            disabled={!writeActionsEnabled}
+            title={writeActionsEnabled ? "New prompt" : writeDisabledMessage}
+            className={`flex items-center gap-1 text-xs transition-colors ${
+              writeActionsEnabled
+                ? "text-white/40 hover:text-white/70"
+                : "cursor-not-allowed text-white/20"
+            }`}
           >
             <Plus size={12} />
             New prompt
