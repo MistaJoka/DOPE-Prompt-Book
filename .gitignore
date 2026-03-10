@@ -10,3 +10,5 @@ yarn-error.log*
 pnpm-debug.log*
 .env*
 .worktrees/
+*.tsbuildinfo
+AGENTS.md
