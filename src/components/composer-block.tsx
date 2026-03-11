@@ -20,7 +20,8 @@ interface ComposerBlockProps {
   onToggleExpand: (instanceId: string) => void;
   onRemove: (instanceId: string) => void;
   onBodyChange: (instanceId: string, body: string) => void;
-  dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
+  dragHandleProps?: React.ButtonHTMLAttributes<HTMLButtonElement>;
+  isDragging?: boolean;
 }
 
 export function ComposerBlock({
@@ -28,39 +29,43 @@ export function ComposerBlock({
   onToggleExpand,
   onRemove,
   onBodyChange,
-  dragHandleProps
+  dragHandleProps,
+  isDragging = false
 }: ComposerBlockProps) {
   const label = categoryLabel(block.category, block.subcategory);
   const badgeColor = CATEGORY_COLORS[label] ?? CATEGORY_COLORS["Snip"];
 
   return (
-    <div className="group flex items-stretch gap-0 rounded-lg border border-white/[0.06] bg-[#1a2128] hover:border-white/10 transition-colors">
-      {/* Drag handle */}
-      <div
+    <div
+      className={`group flex items-stretch gap-0 rounded-lg border bg-[#1a2128] transition-colors ${
+        isDragging
+          ? "border-indigo-400/45 shadow-[0_0_0_1px_rgba(99,102,241,0.25)]"
+          : "border-white/[0.06] hover:border-white/10"
+      }`}
+    >
+      <button
+        type="button"
         {...dragHandleProps}
-        className="flex items-center px-2 text-white/20 hover:text-white/50 cursor-grab active:cursor-grabbing transition-colors rounded-l-lg"
+        className="flex items-center rounded-l-lg px-2 text-white/20 transition-colors hover:text-white/55 focus:outline-none focus-visible:text-white/70 touch-none cursor-grab active:cursor-grabbing"
+        aria-label={`Reorder ${block.title}`}
       >
         <GripVertical size={14} />
-      </div>
+      </button>
 
-      {/* Content */}
-      <div className="flex-1 min-w-0 py-2.5 pr-2.5">
-        {/* Header row */}
-        <div className="flex items-center gap-2">
-          {/* Type badge */}
-          <span
-            className={`shrink-0 text-[10px] font-semibold tracking-wide uppercase px-1.5 py-0.5 rounded border ${badgeColor}`}
-          >
-            {label}
-          </span>
+      <div className="min-w-0 flex-1 py-2.5 pr-2.5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <span
+              className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${badgeColor}`}
+            >
+              {label}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium text-white/85">
+              {block.title}
+            </span>
+          </div>
 
-          {/* Title */}
-          <span className="flex-1 min-w-0 text-sm font-medium text-white/85 truncate">
-            {block.title}
-          </span>
-
-          {/* Actions */}
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex shrink-0 items-center gap-1 self-end sm:self-auto">
             <button
               onClick={() => onToggleExpand(block.instanceId)}
               className="p-1 rounded text-white/30 hover:text-white/70 hover:bg-white/5 transition-colors"
@@ -78,7 +83,6 @@ export function ComposerBlock({
           </div>
         </div>
 
-        {/* Expanded body */}
         {block.isExpanded && (
           <textarea
             value={block.body}

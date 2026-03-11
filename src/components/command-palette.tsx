@@ -105,14 +105,14 @@ export function CommandPalette({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] bg-black/60"
+      className="fixed inset-0 z-50 bg-black/60 md:flex md:items-start md:justify-center md:pt-[15vh]"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg overflow-hidden rounded-xl border border-white/[0.08] bg-[#1a2128] shadow-2xl"
+        className="flex h-[100dvh] w-full flex-col bg-[#1a2128] md:h-auto md:max-w-lg md:overflow-hidden md:rounded-xl md:border md:border-white/[0.08] md:shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-center gap-2.5 border-b border-white/[0.06] px-4 py-3">
+        <div className="safe-top flex items-center gap-2.5 border-b border-white/[0.06] px-4 py-3">
           <Search size={15} className="shrink-0 text-white/30" />
           <input
             ref={inputRef}
@@ -123,12 +123,18 @@ export function CommandPalette({
             placeholder="Search prompts to add…"
             className="flex-1 bg-transparent text-sm text-white/90 placeholder:text-white/30 focus:outline-none"
           />
-          <kbd className="rounded bg-white/[0.05] px-1.5 py-0.5 font-mono text-[10px] text-white/25">
+          <button
+            onClick={onClose}
+            className="rounded border border-white/[0.08] px-2 py-1 text-[11px] text-white/45 transition-colors hover:border-white/[0.14] hover:text-white/70 md:hidden"
+          >
+            Close
+          </button>
+          <kbd className="hidden rounded bg-white/[0.05] px-1.5 py-0.5 font-mono text-[10px] text-white/25 md:inline-flex">
             esc
           </kbd>
         </div>
 
-        <div ref={listRef} className="max-h-72 overflow-y-auto py-1">
+        <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto py-1 md:max-h-72 md:flex-none">
           {filtered.length === 0 ? (
             <p className="px-4 py-6 text-center text-sm text-white/30">No results</p>
           ) : (
@@ -160,8 +166,11 @@ export function CommandPalette({
           )}
         </div>
 
-        <div className="flex items-center justify-between border-t border-white/[0.06] px-4 py-2">
-          <span className="text-xs text-white/25">↑↓ navigate · ↵ add to composer</span>
+        <div className="safe-bottom flex items-center justify-between gap-3 border-t border-white/[0.06] px-4 py-2.5">
+          <span className="hidden text-xs text-white/25 md:inline">
+            ↑↓ navigate · ↵ add to composer
+          </span>
+          <span className="text-xs text-white/25 md:hidden">Tap a prompt to add it.</span>
           <button
             onClick={() => {
               onNewPrompt();

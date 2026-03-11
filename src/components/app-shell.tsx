@@ -1,7 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import {
+  AlertCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Plus,
+  Search
+} from "lucide-react";
 
 import { CommandPalette } from "@/components/command-palette";
 import { ComposerCanvas } from "@/components/composer-canvas";
@@ -85,9 +91,12 @@ export function AppShell({ runtimeConfig }: AppShellProps) {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingPromptId, setEditingPromptId] = useState<string | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [mobileLibraryOpen, setMobileLibraryOpen] = useState(false);
   const [focusSearchSignal, setFocusSearchSignal] = useState(0);
   const writeDisabledMessage =
     runtimeConfig.writeDisabledMessage ?? "Prompt library changes are disabled.";
+  const headerHeight = "calc(2.5rem + env(safe-area-inset-top))";
+  const toastTop = "calc(3.5rem + env(safe-area-inset-top))";
 
   useEffect(() => {
     setWorkspaceState(loadWorkspaceState());
@@ -147,12 +156,14 @@ export function AppShell({ runtimeConfig }: AppShellProps) {
       if (event.key === "/" && !inInput && !commandPaletteOpen) {
         event.preventDefault();
         setWorkspaceState((previous) => ({ ...previous, libraryDrawerOpen: true }));
+        setMobileLibraryOpen(true);
         setFocusSearchSignal((value) => value + 1);
         return;
       }
 
       if (event.key === "Escape") {
         setCommandPaletteOpen(false);
+        setMobileLibraryOpen(false);
         return;
       }
 
@@ -365,50 +376,109 @@ export function AppShell({ runtimeConfig }: AppShellProps) {
     }));
   }, []);
 
+  const closeEditor = useCallback(() => {
+    setEditorOpen(false);
+    setEditingPromptId(null);
+  }, []);
+
+  const showLoadErrorToast = Boolean(loadError && !mobileLibraryOpen);
+  const loadErrorToastDesktopVisibility = workspaceState.libraryDrawerOpen
+    ? "md:hidden"
+    : "md:flex";
+
   return (
-    <div className="flex h-screen overflow-hidden bg-[#0f1317] text-white">
-      <div className="absolute left-0 right-0 top-0 z-10 flex h-10 items-center gap-2 border-b border-white/[0.04] bg-[#0f1317] px-3">
-        <button
-          onClick={toggleDrawer}
-          className="rounded-md p-1.5 text-white/30 transition-colors hover:bg-white/[0.05] hover:text-white/60"
-          title={workspaceState.libraryDrawerOpen ? "Close library" : "Open library"}
-        >
-          {workspaceState.libraryDrawerOpen ? (
-            <PanelLeftClose size={16} />
-          ) : (
-            <PanelLeftOpen size={16} />
-          )}
-        </button>
-        <span className="select-none text-xs font-semibold uppercase tracking-widest text-white/20">
-          DOPE
-        </span>
-        {runtimeConfig.isReadOnlyDemo && runtimeConfig.demoBadgeText && (
-          <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[10px] uppercase tracking-wide text-white/45">
-            {runtimeConfig.demoBadgeText}
-          </span>
-        )}
-        <div className="ml-auto flex items-center gap-3">
-          <a
-            href={PORTFOLIO_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="text-[11px] text-white/25 transition-colors hover:text-white/50"
-          >
-            Portfolio
-          </a>
-          <span className="hidden text-[11px] text-white/25 sm:inline">
-            {loadingPrompts ? "Loading library..." : `${promptDefinitions.length} prompts`}
-          </span>
+    <div className="flex h-[100dvh] overflow-hidden bg-[#0f1317] text-white">
+      <div
+        className="absolute left-0 right-0 top-0 z-20 border-b border-white/[0.04] bg-[#0f1317]"
+        style={{ height: headerHeight, paddingTop: "env(safe-area-inset-top)" }}
+      >
+        <div className="flex h-10 items-center gap-2 px-3">
+          <div className="hidden items-center gap-2 md:flex">
+            <button
+              onClick={toggleDrawer}
+              className="rounded-md p-1.5 text-white/30 transition-colors hover:bg-white/[0.05] hover:text-white/60"
+              title={workspaceState.libraryDrawerOpen ? "Close library" : "Open library"}
+            >
+              {workspaceState.libraryDrawerOpen ? (
+                <PanelLeftClose size={16} />
+              ) : (
+                <PanelLeftOpen size={16} />
+              )}
+            </button>
+            <span className="select-none text-xs font-semibold uppercase tracking-widest text-white/20">
+              DOPE
+            </span>
+            {runtimeConfig.isReadOnlyDemo && runtimeConfig.demoBadgeText && (
+              <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[10px] uppercase tracking-wide text-white/45">
+                {runtimeConfig.demoBadgeText}
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 md:hidden">
+            <span className="select-none text-xs font-semibold uppercase tracking-widest text-white/20">
+              DOPE
+            </span>
+            {runtimeConfig.isReadOnlyDemo && runtimeConfig.demoBadgeText && (
+              <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[10px] uppercase tracking-wide text-white/45">
+                {runtimeConfig.demoBadgeText}
+              </span>
+            )}
+          </div>
+
+          <div className="ml-auto hidden items-center gap-3 md:flex">
+            <a
+              href={PORTFOLIO_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="text-[11px] text-white/25 transition-colors hover:text-white/50"
+            >
+              Portfolio
+            </a>
+            <span className="text-[11px] text-white/25">
+              {loadingPrompts ? "Loading library..." : `${promptDefinitions.length} prompts`}
+            </span>
+          </div>
+
+          <div className="ml-auto flex items-center gap-2 md:hidden">
+            <button
+              onClick={() => setMobileLibraryOpen(true)}
+              className="rounded-md border border-white/[0.08] px-2.5 py-1.5 text-xs text-white/55 transition-colors hover:border-white/[0.14] hover:text-white/80"
+            >
+              Library
+            </button>
+            <button
+              onClick={() => setCommandPaletteOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] px-2.5 py-1.5 text-xs text-white/55 transition-colors hover:border-white/[0.14] hover:text-white/80"
+            >
+              <Search size={12} />
+              Search
+            </button>
+            <button
+              onClick={openNewPrompt}
+              disabled={!runtimeConfig.writeActionsEnabled}
+              title={runtimeConfig.writeActionsEnabled ? "New prompt" : writeDisabledMessage}
+              className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${
+                runtimeConfig.writeActionsEnabled
+                  ? "border-white/[0.08] text-white/55 hover:border-white/[0.14] hover:text-white/80"
+                  : "cursor-not-allowed border-white/[0.04] text-white/20"
+              }`}
+            >
+              <Plus size={12} />
+              New
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 pt-10">
+      <div className="flex min-h-0 flex-1" style={{ paddingTop: headerHeight }}>
         {workspaceState.libraryDrawerOpen && (
-          <div className="h-full w-80 shrink-0 overflow-hidden">
+          <div className="hidden h-full w-80 shrink-0 overflow-hidden md:block">
             <LibraryDrawer
               prompts={prompts}
               loading={loadingPrompts}
               error={loadError}
+              presentation="inline"
               tab={workspaceState.libraryTab}
               search={workspaceState.librarySearch}
               sort={workspaceState.sort}
@@ -443,8 +513,55 @@ export function AppShell({ runtimeConfig }: AppShellProps) {
         </div>
       </div>
 
-      {(actionError || (!workspaceState.libraryDrawerOpen && loadError)) && (
-        <div className="absolute right-4 top-14 z-10 flex items-center gap-2 rounded-lg border border-red-400/25 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+      {mobileLibraryOpen && (
+        <div className="fixed inset-0 z-40 bg-black/60 md:hidden">
+          <LibraryDrawer
+            prompts={prompts}
+            loading={loadingPrompts}
+            error={loadError}
+            presentation="sheet"
+            tab={workspaceState.libraryTab}
+            search={workspaceState.librarySearch}
+            sort={workspaceState.sort}
+            filters={workspaceState.filters}
+            focusSearchSignal={focusSearchSignal}
+            onClose={() => setMobileLibraryOpen(false)}
+            onTabChange={setLibraryTab}
+            onSearchChange={setLibrarySearch}
+            onSortChange={setSort}
+            onFiltersChange={setFilters}
+            onAddToComposer={(prompt) => {
+              addToComposer(prompt);
+              setMobileLibraryOpen(false);
+            }}
+            onEditPrompt={(prompt) => {
+              setMobileLibraryOpen(false);
+              openEditPrompt(prompt);
+            }}
+            onDuplicatePrompt={async (prompt) => {
+              setMobileLibraryOpen(false);
+              await handleDuplicatePrompt(prompt);
+            }}
+            onToggleFavorite={handleToggleFavorite}
+            onArchivePrompt={handleArchivePrompt}
+            onNewPrompt={() => {
+              setMobileLibraryOpen(false);
+              openNewPrompt();
+            }}
+            writeActionsEnabled={runtimeConfig.writeActionsEnabled}
+            writeDisabledMessage={writeDisabledMessage}
+            onRetry={loadPrompts}
+          />
+        </div>
+      )}
+
+      {(actionError || showLoadErrorToast) && (
+        <div
+          className={`absolute left-3 right-3 z-30 flex items-center gap-2 rounded-lg border border-red-400/25 bg-red-500/10 px-3 py-2 text-xs text-red-200 md:left-auto md:right-4 ${
+            actionError ? "md:flex" : loadErrorToastDesktopVisibility
+          }`}
+          style={{ top: toastTop }}
+        >
           <AlertCircle size={13} />
           {actionError ?? loadError}
         </div>
@@ -453,10 +570,7 @@ export function AppShell({ runtimeConfig }: AppShellProps) {
       <PromptEditor
         open={editorOpen}
         prompt={editingPrompt}
-        onClose={() => {
-          setEditorOpen(false);
-          setEditingPromptId(null);
-        }}
+        onClose={closeEditor}
         onSave={savePrompt}
       />
 

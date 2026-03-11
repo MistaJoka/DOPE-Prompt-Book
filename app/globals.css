@@ -37,11 +37,16 @@ body {
 
 body {
   margin: 0;
+  min-height: 100dvh;
   background: radial-gradient(circle at top, #1a2732 0%, #0b1015 45%, #090d12 100%);
   color: hsl(var(--foreground));
   font-family: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
   font-size: 14px;
   text-rendering: optimizeLegibility;
+}
+
+#__next {
+  min-height: 100dvh;
 }
 
 button,
@@ -53,4 +58,12 @@ textarea {
 
 summary::-webkit-details-marker {
   display: none;
+}
+
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
 }

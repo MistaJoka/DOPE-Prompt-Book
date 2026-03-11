@@ -59,11 +59,13 @@ interface LibraryDrawerProps {
   prompts: PromptRecord[];
   loading: boolean;
   error: string | null;
+  presentation?: "inline" | "sheet";
   tab: LibraryTab;
   search: string;
   sort: SortMode;
   filters: LibraryFilters;
   focusSearchSignal: number;
+  onClose?: () => void;
   onTabChange: (tab: LibraryTab) => void;
   onSearchChange: (value: string) => void;
   onSortChange: (sort: SortMode) => void;
@@ -95,7 +97,7 @@ function PromptActionButton({
       onClick={onClick}
       title={label}
       disabled={disabled}
-      className={`rounded p-1 transition-colors ${
+      className={`rounded p-1.5 transition-colors ${
         disabled
           ? "cursor-not-allowed text-white/15"
           : "text-white/35 hover:bg-white/[0.06] hover:text-white/75"
@@ -135,7 +137,7 @@ function PromptRow({
           onAdd(prompt);
         }
       }}
-      className="group relative w-full cursor-pointer rounded-lg border border-transparent px-3 py-2.5 text-left transition-all hover:border-white/[0.06] hover:bg-white/[0.04]"
+      className="group relative w-full cursor-pointer rounded-lg border border-transparent px-3 py-3 text-left transition-all hover:border-white/[0.06] hover:bg-white/[0.04]"
     >
       <div className="flex items-start gap-2.5">
         <div className="min-w-0 flex-1">
@@ -323,11 +325,13 @@ export function LibraryDrawer({
   prompts,
   loading,
   error,
+  presentation = "inline",
   tab,
   search,
   sort,
   filters,
   focusSearchSignal,
+  onClose,
   onTabChange,
   onSearchChange,
   onSortChange,
@@ -345,6 +349,7 @@ export function LibraryDrawer({
   const searchRef = useRef<HTMLInputElement>(null);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const isSheet = presentation === "sheet";
 
   useEffect(() => {
     if (focusSearchSignal > 0) {
@@ -554,7 +559,28 @@ export function LibraryDrawer({
   };
 
   return (
-    <div className="flex h-full flex-col border-r border-white/[0.05] bg-[#12181e]">
+    <div
+      className={`flex h-full flex-col bg-[#12181e] ${
+        isSheet ? "safe-top safe-bottom" : "border-r border-white/[0.05]"
+      }`}
+    >
+      {isSheet && (
+        <div className="flex shrink-0 items-center gap-3 border-b border-white/[0.05] px-3 py-3">
+          <div>
+            <p className="text-sm font-semibold text-white/85">Prompt Library</p>
+            <p className="text-[11px] text-white/30">Browse, filter, and add prompt pieces.</p>
+          </div>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="ml-auto rounded-md border border-white/[0.08] px-2.5 py-1.5 text-xs text-white/55 transition-colors hover:border-white/[0.14] hover:text-white/80"
+            >
+              Close
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="shrink-0 px-3 pb-2 pt-3">
         <div className="relative">
           <Search
